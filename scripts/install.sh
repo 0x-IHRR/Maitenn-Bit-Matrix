@@ -14,7 +14,7 @@ node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a
 
 mkdir -p "$DIR"; cd "$DIR"
 for R in mdldm-maitian mdldm-maitian-publisher; do
-  if [ -d "$R/.git" ]; then say "更新 $R"; git -C "$R" pull --ff-only -q; else say "下载 $R"; for i in 1 2 3; do git clone -q --depth 1 "https://github.com/CzzzzzzJ/$R.git" && break; echo "下载失败，第 $i 次重试"; rm -rf "$R"; sleep 3; done; [ -d "$R/.git" ] || { echo "$R 下载失败，检查网络后重跑这条命令"; exit 1; }; fi
+  if [ -d "$R/.git" ]; then say "更新 $R"; git -C "$R" pull --ff-only -q; else say "下载 $R"; for i in 1 2 3; do git clone --depth 1 "https://github.com/CzzzzzzJ/$R.git" && break; echo "下载失败，第 $i 次重试"; rm -rf "$R"; sleep 3; done; [ -d "$R/.git" ] || { echo "$R 下载失败，检查网络后重跑这条命令"; exit 1; }; fi
 done
 
 say "麦田发布助手（Chrome 插件）"
