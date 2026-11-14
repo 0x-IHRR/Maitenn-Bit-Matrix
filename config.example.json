@@ -31,7 +31,8 @@
     "adminPath": "/admin",
     "coursesApi": "/api/courses?admin=1",
     "dashboardApi": "/api/admin/dashboard",
-    "coursePath": "/series/{seriesId}?courseId={id}"
+    "coursePath": "/series/{seriesId}?courseId={id}",
+    "logo": "可选：站点图标的本地路径，比如 data/site-logo.png"
   },
 
   "board": {
