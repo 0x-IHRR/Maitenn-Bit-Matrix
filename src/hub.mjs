@@ -307,6 +307,9 @@ async function daemon() {
       if (new Date().getHours() >= 10 && getMeta('metricsDay') !== new Date().toLocaleDateString('zh-CN')) {
         setMeta('metricsDay', new Date().toLocaleDateString('zh-CN'));
         await metricsReport(episodes().filter(e => Date.now() - Date.parse(e.created_at) < 30 * 86400e3)).catch((e) => console.error('流量采集出错：' + e.message));
+        // 采完流量：到第 1/3/7 天的期出复盘卡片，周一出周报（每条只发一次）
+        try { const R = await import('./review.mjs'); for (const t of R.due((k) => { if (getMeta(k)) return false; setMeta(k, Date.now()); return true; })) await notify(t); }
+        catch (e) { console.error('复盘出错：' + e.message); }
       }
       // 每天上午体检一次，有平台掉线才通知
       const day = new Date().toLocaleDateString('zh-CN');
@@ -322,6 +325,11 @@ try {
   else if (cmd === 'sync') { const ep = getEpisode(args[1]); if (!ep) throw new Error('没有这一期，先 hub status 看 id'); await sync(ep, opt('--only') ? opt('--only').split(',') : null); }
   else if (cmd === 'doctor') await doctor();
   else if (cmd === 'board') { await drv.ensure(); const r = await boardSync(); console.log(JSON.stringify(r)); }
+  else if (cmd === 'review') {   // hub review <id> [天数]：看某一期发布 N 天的复盘（加 --notify 发飞书）
+    const R = await import('./review.mjs'); const ep = getEpisode(args[1]); if (!ep) throw new Error('没有这一期，先 hub status 看 id');
+    const t = R.reviewText(R.review(ep, +(args[2] && !args[2].startsWith('--') ? args[2] : 1))); console.log(t); if (args.includes('--notify')) await notify(t);
+  }
+  else if (cmd === 'weekly') { const R = await import('./review.mjs'); const w = R.weekly(); console.log(w.text); if (args.includes('--notify')) await notify(w.text); }
   else if (cmd === 'metrics') { const list = args[1] ? [getEpisode(args[1])].filter(Boolean) : episodes().filter(e => Date.now() - Date.parse(e.created_at) < 30 * 86400e3); await metricsReport(list); }
   else if (cmd === 'plan') {   // 只登记、不上传：大屏「分发计划」里先看到这一期
     if (args[1] && !args[1].startsWith('--')) { const r = planDir(path.resolve(args[1])); console.log(r ? `已登记计划：${r}` : '这一期已经登记过了'); }
