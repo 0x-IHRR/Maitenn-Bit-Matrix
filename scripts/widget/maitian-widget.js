@@ -52,6 +52,17 @@ function maimiao(px = 6) {
   return ctx.getImage();
 }
 
+// 锁屏用：系统图标、短数字、进度环
+function sym(name, size) { const s = SFSymbol.named(name); s.applyFont(Font.systemFont(size)); return s.image; }
+const signShort = n => (n > 0 ? '+' : n < 0 ? '−' : '') + short(Math.abs(n || 0));
+function ring(k) {
+  const S = 120, r = 52, ctx = new DrawContext(); ctx.size = new Size(S, S); ctx.opaque = false; ctx.respectScreenScale = true;
+  const arc = (from, to, alpha) => { const p = new Path(), N = 72; for (let i = 0; i <= N; i++) { const a = -Math.PI / 2 + (from + (to - from) * i / N) * Math.PI * 2, pt = new Point(S / 2 + r * Math.cos(a), S / 2 + r * Math.sin(a)); i ? p.addLine(pt) : p.move(pt); }
+    ctx.addPath(p); ctx.setStrokeColor(new Color('#ffffff', alpha)); ctx.setLineWidth(9); ctx.strokePath(); };
+  arc(0, 1, 0.25); if (k > 0) arc(0, k, 1);
+  return ctx.getImage();
+}
+
 // ───── 小工具 ─────
 function text(st, s, size, color = C.ink, weight = 'bold') {
   const t = st.addText(String(s));
@@ -120,16 +131,36 @@ if (!data) {
   w.backgroundGradient = bgGradient();
   text(w, '🌾 连不上麦田', 14); w.addSpacer(4); text(w, '检查麦田地址和小组件口令', 11, C.dim, 'medium');
 } else if (fam === 'accessoryInline') {
-  w.addText(`🌾 ${fmt(data.fans.total)} 粉 ${sign(data.fans.today)}`);
+  // 锁屏单行（时间上方）：系统只取一行文字和一个图标
+  w.addText(`🌾 ${fmt(data.fans.total)} · 今日 ${sign(data.fans.today)}`);
 } else if (fam === 'accessoryCircular') {
+  // 圆形：今日涨粉 + 进度环（今天 / 近 7 天日均，满一圈 = 比平时涨得多）
   w.addAccessoryWidgetBackground = true;
+  const avg = Math.max(1, (data.fans.week || 0) / 7), k = Math.max(0, Math.min(1, (data.fans.today || 0) / avg));
+  w.backgroundImage = ring(k);
   const s = w.addStack(); s.layoutVertically(); s.centerAlignContent();
-  const a = s.addText('今日'); a.font = Font.mediumSystemFont(10); a.centerAlignText();
-  const b = s.addText(sign(data.fans.today)); b.font = Font.boldRoundedSystemFont(15); b.minimumScaleFactor = 0.5; b.centerAlignText();
+  const ic = s.addStack(); ic.addSpacer(); const im = ic.addImage(sym('leaf.fill', 10)); im.imageSize = new Size(10, 10); ic.addSpacer();
+  const b = s.addText(signShort(data.fans.today)); b.font = Font.heavyRoundedSystemFont(16); b.minimumScaleFactor = 0.5; b.centerAlignText();
+  const a = s.addText('今日'); a.font = Font.mediumRoundedSystemFont(9); a.textOpacity = 0.75; a.centerAlignText();
 } else if (fam === 'accessoryRectangular') {
-  const l1 = w.addText(`🌾 ${fmt(data.fans.total)} 粉  ${sign(data.fans.today)}`); l1.font = Font.boldRoundedSystemFont(14); l1.minimumScaleFactor = 0.7;
-  if (data.latest) { const l2 = w.addText(`最新一期 ${fmt(data.latest.views)} 播放`); l2.font = Font.mediumSystemFont(12); }
-  if (data.site) { const l3 = w.addText(`7天 注册 ${fmt(data.site.reg)} · ${money(data.site.revenue)}`); l3.font = Font.mediumSystemFont(12); l3.minimumScaleFactor = 0.7; }
+  // 长条：粉丝（大）+ 今日；最新一期；站点 7 天
+  w.addAccessoryWidgetBackground = true; w.setPadding(4, 8, 4, 8);
+  const l1 = w.addStack(); l1.centerAlignContent();
+  const ic = l1.addImage(sym('leaf.fill', 13)); ic.imageSize = new Size(13, 13); l1.addSpacer(4);
+  const n = l1.addText(fmt(data.fans.total)); n.font = Font.heavyRoundedSystemFont(17); n.minimumScaleFactor = 0.7; n.lineLimit = 1;
+  l1.addSpacer();
+  const d = l1.addText(sign(data.fans.today)); d.font = Font.boldRoundedSystemFont(13); d.lineLimit = 1;
+  if (data.latest) {
+    const l2 = w.addStack(); l2.centerAlignContent();
+    const i2 = l2.addImage(sym('play.rectangle.fill', 10)); i2.imageSize = new Size(11, 10); l2.addSpacer(4);
+    const h = data.latest.hours; const age = h == null ? '' : h < 1 ? ' · 刚发布' : h < 48 ? ` · ${h} 小时` : ` · ${Math.round(h / 24)} 天`;
+    const t2 = l2.addText(`${fmt(data.latest.views)} 播放${age}`); t2.font = Font.mediumRoundedSystemFont(12); t2.lineLimit = 1; t2.minimumScaleFactor = 0.7;
+  }
+  if (data.site) {
+    const l3 = w.addStack(); l3.centerAlignContent();
+    const i3 = l3.addImage(sym('yensign.circle.fill', 10)); i3.imageSize = new Size(10, 10); l3.addSpacer(4);
+    const t3 = l3.addText(`7天 ${money(data.site.revenue)} · 会员 ${fmt(data.site.vip)}`); t3.font = Font.mediumRoundedSystemFont(12); t3.lineLimit = 1; t3.minimumScaleFactor = 0.7;
+  }
 } else if (fam === 'small') {
   w.backgroundGradient = bgGradient(); w.setPadding(13, 14, 13, 14);
   const h = w.addStack(); h.centerAlignContent(); avatarImg(h, 30, new Color('#ffffff')); h.addSpacer(7);
