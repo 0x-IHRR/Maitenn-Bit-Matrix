@@ -4,6 +4,7 @@ import { db, NAMES, STATE_CN, episodes, getEpisode, getTasks, recentLogs, getSna
 import { config } from './feishu.mjs';
 import { SITE } from './site.mjs';
 import { review } from './review.mjs';
+import { accessEmail } from './access.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.resolve(DIR, '..');
 const W = config.web || { port: 8787, key: '' };
@@ -51,9 +52,9 @@ async function chromeUp() { try { const r = await fetch(`http://127.0.0.1:${conf
 
 async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
-  // 访问口令：第一次带 ?key= 进来，之后用 cookie
+  // 访问控制：前面挂了 Cloudflare Access（邮箱验证码）就认它的登录凭证；否则用口令（第一次带 ?key= 进来，之后用 cookie）
   const cookieKey = ((req.headers.cookie || '').match(/mt_key=([^;]+)/) || [])[1];
-  if (W.key && cookieKey !== W.key) {
+  if (W.key && cookieKey !== W.key && !(await accessEmail(req, W.access))) {
     if (u.searchParams.get('key') === W.key) return send(res, 302, '', 'text/plain', { 'set-cookie': `mt_key=${W.key}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax`, location: '/' });
     return send(res, 401, '<meta charset="utf-8"><body style="font:16px system-ui;padding:40px">需要访问口令。请用带 <code>?key=…</code> 的地址打开一次。</body>', 'text/html; charset=utf-8');
   }
