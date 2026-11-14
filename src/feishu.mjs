@@ -48,8 +48,8 @@ async function post(body) {
 }
 
 // 发飞书群消息；卡片发不出去就退回纯文字；失败只打印，不影响主流程
-export async function notify(text) {
-  console.log(`[飞书] ${text.replace(/\n/g, ' | ')}`);
+export async function notify(text, { quiet = false } = {}) {
+  if (!quiet) console.log(`[飞书] ${text.replace(/\n/g, ' | ')}`);   // quiet：验证码之类的不写日志
   if (!config.feishuWebhook) return;
   try {
     let j = await post({ msg_type: 'interactive', card: toCard(text) });
