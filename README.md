@@ -1,9 +1,30 @@
 # 麦田 · mdldm-maitian
 
-一个人做自媒体的发布中控：一条成片，分批发到 B站、抖音、小红书、视频号、YouTube、X（外加可选的自有课程站），
-发完自动取链接、每天采流量和粉丝，飞书群里推卡片，再给你一个能在手机上看的数据大屏。
+**给多平台博主的开源工作台：发得出去、看得清楚、算得出钱。**
+
+1. **多平台分发 + 定时**：一期视频分批填好 B站、抖音、小红书、视频号、YouTube、X，提前排进「分发计划」，到点发布、自动取链接。
+2. **多平台数据监控与留存**：每期在每个平台的播放、互动，各平台粉丝，每天自动采、长期留存；手机上看大屏，飞书群推卡片。
+3. **打通你自己的站点，看转化**：哪一期、哪个平台带来了注册和收入。麦田留好了接口，接入你自己的站点后在上面二次开发即可（作者用自己的课程站做了示例）。
 
 > 作者在用它发「我看谁不学 Grok Bot」等系列视频。它跑在一台常开的 Mac 上，用你自己登录好的浏览器操作各平台，**不存任何平台密码**。
+
+## 工作台由哪几部分组成
+
+| 部分 | 做什么 | 在哪 |
+|---|---|---|
+| 发布 skill | 让 AI 助手（Claude Code / Codex）看片、写各平台文案、生成发布工程并校验 | 本仓库 [`skills/maitian-publish`](skills/maitian-publish/SKILL.md) |
+| 麦田发布助手 | Chrome 插件，各平台适配器：打开上传页、传视频和封面、填文案、设定时 | [mdldm-maitian-publisher](https://github.com/CzzzzzzJ/mdldm-maitian-publisher) |
+| 麦田（本仓库） | 分发计划、调度、防重、等你点发布、取链接、采数据、网页大屏、飞书通知 | 本仓库 |
+
+链路：成片 → skill 写「发布素材.md」→ 生成 `publish.json` → `hub plan` 进分发计划 → `hub run` 分批填写 → 国内平台你点发布 → 到点取链接 → 每天采数据 → 大屏和飞书卡片。
+
+## 三级上手
+
+| 级别 | 你能得到 | 要装的 | 大概时间 |
+|---|---|---|---|
+| L1 只看数据 | 各平台粉丝、已发作品的播放互动、大屏、飞书日报 | 麦田；专用 Chrome 里登录各平台；已发的期用 `hub adopt` 登记 | 30 分钟 |
+| L2 分发 | 一期一次填好六个平台，定时，自动取链接 | + 麦田发布助手；+ 发布 skill（或手写 `publish.json`） | 再 1 小时 |
+| L3 转化 | 每期带来的注册和收入 | + 你自己的站点按 `src/site.mjs` 的接口接入 | 看站点 |
 
 ## 它做什么
 
@@ -22,7 +43,7 @@
             ┌────────────── Mac（常开）──────────────┐
 NAS 发布工程 │  hub.mjs 守护进程 ──── 专用 Chrome（CDP 9333）── 各平台创作者后台
 publish.json ─▶│     │  ▲                 ▲                       │
-成片/封面     │     │  │ 平台适配器（obsidian-x-publisher/lib）   │
+成片/封面     │     │  │ 平台适配器（麦田发布助手 lib/）       │
             │     ▼  │                                          │
             │  SQLite（data/hub.db） ── web.mjs（麦田网页 :8787）── 手机/电脑（可选 Cloudflare 隧道）
             │     │                                              │
@@ -30,7 +51,7 @@ publish.json ─▶│     │  ▲                 ▲                       �
             └───────────────────────────────────────────────┘
 ```
 
-- 平台填写逻辑在姊妹仓库 [obsidian-x-publisher](https://github.com/CzzzzzzJ/obsidian-x-publisher)（Chrome 插件）里，麦田直接加载它的 `lib/`，适配器只维护一份。`src/chrome-shim.mjs` 在 Node 里模拟插件需要的 `chrome.tabs` / `chrome.debugger`。
+- 平台填写逻辑在姊妹仓库 [麦田发布助手 mdldm-maitian-publisher](https://github.com/CzzzzzzJ/mdldm-maitian-publisher)（Chrome 插件）里，麦田直接加载它的 `lib/`，适配器只维护一份。`src/chrome-shim.mjs` 在 Node 里模拟插件需要的 `chrome.tabs` / `chrome.debugger`。
 - 发布工程 `publish.json` 由插件仓库的 `tools/make-publish.mjs` 从一份 Markdown 发布素材生成，`tools/validate.mjs` 校验（字数、禁词、封面比例、成片 faststart 等）。
 
 ## 安装
@@ -38,7 +59,7 @@ publish.json ─▶│     │  ▲                 ▲                       �
 需要：macOS、Node.js ≥ 22.5（用到内置 `node:sqlite`）、Google Chrome；可选 NAS（放成片）、飞书群机器人、cloudflared。
 
 ```bash
-git clone https://github.com/CzzzzzzJ/obsidian-x-publisher.git
+git clone https://github.com/CzzzzzzJ/mdldm-maitian-publisher.git
 git clone https://github.com/CzzzzzzJ/mdldm-maitian.git && cd mdldm-maitian
 cp config.example.json config.json      # 填 pluginDir、rootPath、feishuWebhook、web.key……
 node src/hub.mjs login                  # 打开专用 Chrome 和各平台页面，逐个扫码 / 登录
@@ -51,6 +72,7 @@ scripts/install-launchd.sh              # 装成开机自启的守护进程（�
 ## 命令
 
 ```bash
+node src/hub.mjs plan [工程目录]            # 登记进分发计划（不带目录 = 扫描 rootPath）
 node src/hub.mjs run <工程目录> [--only x,zsz] [--force] [--now]   # 发一期；--now 让站点课程立即上线（默认推迟到定时前 30 分钟）
 node src/hub.mjs status [id] [--logs]
 node src/hub.mjs sync <id> [--only a,b]     # 取链接，写 发布记录.json，回填发布素材 md 的「已发布」行
@@ -66,7 +88,7 @@ node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的
 
 | 项 | 说明 |
 |---|---|
-| `pluginDir` | obsidian-x-publisher 的本地路径 |
+| `pluginDir` | 麦田发布助手（mdldm-maitian-publisher）的本地路径 |
 | `rootPath` / `nasUrl` | 发布工程根目录；NAS 掉线或被挂到「…-1」时守护进程会自己卸掉重挂 |
 | `batches` | 上传批次。一次传太多平台会互相抢带宽导致超时，建议国内两两一批 |
 | `auto` / `manual` | 自动提交 / 等你点发布的平台 |
@@ -75,14 +97,15 @@ node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的
 | `board` | 飞书多维表格看板，可选 |
 | `web.key` | 网页口令，所有页面和接口没有口令一律 401 |
 
-## 自有站点（可选）
+## 接入你自己的站点（可选，二次开发）
 
-不配 `site` 就整块关掉：不建课、不采注册，网页隐藏站点卡片和「转化」页。要接自己的站，提供两个接口（麦田用专用 Chrome 里的管理员登录态去调）：
+不配 `config.site` 就整块关掉，网页上也不显示站点卡片和「转化」页。要看转化：
 
-- `coursesApi` → `{ courses: [{ _id, title, seriesId, visibilityStatus, viewCount, publishedAt }] }`
-- `dashboardApi` → `{ funnel: { totalRegistered }, registrationTrend, revenueTrend, channelStats, campaignStats? }`
+1. 发布 skill 会在 B站、YouTube、X 的链接上带 `utm_campaign=<主题>-<序号>`；你的站点记下访客第一次带来的这个参数，注册和下单时一起存。
+2. 站点提供两个只读接口给麦田（用专用 Chrome 里的管理员登录态去调），字段见 [`src/site.mjs`](src/site.mjs) 顶部注释。
+3. 在 `config.site` 里填站点地址和接口路径。
 
-字段细节见 `src/site.mjs` 顶部注释。
+作者用自己的课程站做了示例；你的站结构不同，改 `src/site.mjs` 和转化页即可。
 
 ## 各平台的坑（实战总结）
 

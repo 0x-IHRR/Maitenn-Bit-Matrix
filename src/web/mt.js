@@ -14,7 +14,7 @@ const safeUrl = (u) => /^https?:\/\//.test(u || '') ? esc(u) : '';
 const when = (iso) => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? esc(iso) : `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const ago = (iso) => { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? '刚刚' : m < 60 ? m + ' 分钟前' : m < 1440 ? Math.round(m / 60) + ' 小时前' : Math.round(m / 1440) + ' 天前'; };
 const inter = (m) => m ? (m.likes || 0) + (m.comments || 0) + (m.favorites || 0) + (m.shares || 0) : 0;
-const chip = (t) => `<span class="st-chip ${esc(t.state)}"><i>${({ published: '✓', scheduled: '◷', awaiting_user: '!', filled: '!', failed: '✕', not_logged_in: '✕', running: '…' })[t.state] || '○'}</i>${esc(t.stateCn)}</span>`;
+const chip = (t) => `<span class="st-chip ${esc(t.state)}"><i>${({ published: '✓', scheduled: '◷', awaiting_user: '!', filled: '!', failed: '✕', not_logged_in: '✕', running: '…', planned: '◌' })[t.state] || '○'}</i>${esc(t.stateCn)}</span>`;
 const delta = (a, b) => { if (!b) return '<span style="color:var(--t3)">前 7 天没有数据</span>'; const p = (a - b) / b * 100; return `<span class="pill ${p >= 0 ? 'up' : 'down'}">${p >= 0 ? '↑' : '↓'} ${Math.abs(p).toFixed(0)}%</span><span style="color:var(--t3)">较前 7 天 ${fmt(b)}</span>`; };
 async function api(p) { const r = await fetch(p); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status); return r.json(); }
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600); }

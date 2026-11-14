@@ -125,7 +125,7 @@ summary .lg{--s:24px}summary b{width:70px;font-weight:600;flex:none}summary span
 /* 大卡轮播（2026-11-13）：多期待发布/刚发布时，右上角切换 */
 .hero{transition:opacity .18s}.hero.fade{opacity:.35}
 .ctabs{flex:none;display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:-6px 0 10px}.ctabs::-webkit-scrollbar{display:none}
-.ct{position:relative;overflow:hidden;font:500 12px/1 -apple-system,"PingFang SC",sans-serif;color:var(--t2);background:rgba(255,255,255,.7);border:0;border-radius:999px;padding:7px 12px 7px 10px;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);display:inline-flex;align-items:center;gap:6px;max-width:220px;white-space:nowrap;text-overflow:ellipsis}
+.ct{flex:none;position:relative;overflow:hidden;font:500 12px/1 -apple-system,"PingFang SC",sans-serif;color:var(--t2);background:rgba(255,255,255,.7);border:0;border-radius:999px;padding:7px 12px 7px 10px;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);display:inline-flex;align-items:center;gap:6px;max-width:220px;white-space:nowrap;text-overflow:ellipsis}
 .ct:hover{color:var(--t1);background:#fff}
 .ct.on{color:#fff;background:var(--t1);box-shadow:none}
 .ct i{width:7px;height:7px;border-radius:50%;flex:none;background:#c7c7cc}.ct i.ok{background:#30d158}.ct i.warn{background:#ff9f0a}.ct i.wait{background:#0a84ff}
@@ -133,3 +133,5 @@ summary .lg{--s:24px}summary b{width:70px;font-weight:600;flex:none}summary span
 @keyframes ctbar{from{width:0}to{width:100%}}
 .hero:hover .ct u{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){.ct u{display:none}}
+
+.st-chip.planned{background:transparent;color:var(--t2);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}.st-chip.planned i{background:transparent;color:var(--t3)}

@@ -105,8 +105,9 @@ function insights(cur, ref) {
 function heroHTML(cur, prev) {
   const now = Date.now(), at = cur.schedule ? Date.parse(cur.schedule) : null;
   const pubN = cur.tasks.filter(t => t.state === 'published').length, sch = cur.tasks.filter(t => t.state === 'scheduled').length, todo = cur.tasks.filter(t => ['awaiting_user', 'filled'].includes(t.state)).length, bad = cur.tasks.filter(t => ['failed', 'not_logged_in'].includes(t.state)).length;
-  const st = bad ? `${bad} 个平台异常` : todo ? `${todo} 个平台等你点发布` : sch ? `${pubN} 已发布 · ${sch} 定时` : '全部已发布';
-  const eb = bad || todo ? '发布中' : at && at > now ? '即将发布' : at && now - at < 48 * 3600e3 ? '刚发布' : '最新发布';
+  const plan = cur.tasks.filter(t => t.state === 'planned').length;
+  const st = bad ? `${bad} 个平台异常` : todo ? `${todo} 个平台等你点发布` : plan === cur.tasks.filter(t => t.state !== 'skipped').length ? `${plan} 个平台，还没开跑` : plan ? `${plan} 个平台还没开跑` : sch ? `${pubN} 已发布 · ${sch} 定时` : '全部已发布';
+  const eb = plan && !pubN && !sch ? '分发计划' : bad || todo ? '发布中' : at && at > now ? '即将发布' : at && now - at < 48 * 3600e3 ? '刚发布' : '最新发布';
   const cmp = prev ? `<div class="cmp">上一期「${esc(prev.nick)}」目前 <b style="color:var(--t1)">${fmt(prev.views)}</b> 播放${cur.views > 1 ? `，这一期是它的 ${pct(cur.views, prev.views)}` : '，这一期发出后在这里对比'}<div class="tr"><i style="width:${Math.min(100, cur.views / Math.max(prev.views, 1) * 100).toFixed(1)}%"></i></div></div>` : '';
   const [t1, t2] = cur.name.split(/[｜|]/).map(x => x.trim()), k = cur.covers.includes('3x4') ? '3x4' : cur.covers[0], src = `/cover?id=${encodeURIComponent(cur.id)}&k=${k}`;
   const tabs = SL.length > 1 ? `<div class="ctabs">${SL.map((e, i) => { const d = e.schedule ? new Date(e.schedule) : null, dd = d ? Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5) : null;
@@ -122,10 +123,11 @@ let SL = [], HI = null, HID = null, HT = null;
 function show(i, user) {
   if (!SL.length) return; HI = (i + SL.length) % SL.length; HID = SL[HI].id;
   const el = $('#hero'); if (!el) return;
-  el.classList.add('fade'); setTimeout(() => { el.innerHTML = heroHTML(SL[HI], PREVOF ? PREVOF(SL[HI]) : null); el.classList.remove('fade'); tick(); }, 180);
+  el.classList.add('fade'); setTimeout(() => { el.innerHTML = heroHTML(SL[HI], PREVOF ? PREVOF(SL[HI]) : null); el.classList.remove('fade'); tick(); fixTabs(); }, 180);
   if (user) PAUSE = Date.now() + 30000;
 }
 let PAUSE = 0, PREVOF = null;
+const fixTabs = () => { const c = document.querySelector('.ctabs'), o = c && c.querySelector('.ct.on'); if (o) c.scrollLeft = Math.max(0, o.offsetLeft - c.offsetLeft - 40); };
 setInterval(() => { if (SL.length > 1 && Date.now() > PAUSE && !document.hidden && !($('#hero') && $('#hero').matches(':hover'))) show(HI + 1); }, 9000);
 document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('.ct'); if (b) { e.preventDefault(); show(+b.dataset.i, true); } });
 
@@ -180,7 +182,7 @@ function render() {
 
   ${O.siteOn ? `  <a class="panel strip" href="/p#/convert"><h3>${esc(PN.zsz)} · 近 7 天</h3><span>新注册<b>${fmt(sum(l7, 'reg'))}</b></span><span>新会员<b>${fmt(sum(l7, 'vip'))}</b></span><span>订单<b>${fmt(sum(l7, 'orders'))}</b></span><span>收入<b>¥${fmt(sum(l7, 'revenue'))}</b></span>
     <span class="feedline">${f0 ? `最近动态：${pad(new Date(f0.ts).getHours())}:${pad(new Date(f0.ts).getMinutes())} ${f0.nick ? '「' + esc(f0.nick) + '」' : ''}${esc(f0.platform)} ${esc(f0.action)}${f0.result ? ' · ' + esc(f0.result) : ''}` : ''}</span><span class="go">转化详情 ›</span></a>` : ''}`;
-  draw(); tick(); if (!render.done) { render.done = true; countUp(); }
+  draw(); tick(); fixTabs(); if (!render.done) { render.done = true; countUp(); }
 }
 function draw() { if (!O) return; const ins = document.querySelector('.ins'); if (ins && innerWidth > 1100) { [...ins.children].forEach(c => c.style.display = ''); for (let k = ins.children.length - 1; k > 0 && ins.scrollHeight > ins.clientHeight + 2; k--) ins.children[k].style.display = 'none'; } const el = $('#c-fans'); if (!el) return; drawFans(el, daysBack(30), Object.fromEntries(O.episodes.filter(e => e.schedule).map(e => [e.schedule.slice(0, 10), e.nick]))); }
 function countUp() {
@@ -197,7 +199,7 @@ function tick() {
   const cd = $('#cd'), cur = O && (SL[HI] || O.episodes[0]);
   if (cd && cur) {
     const s = cur.schedule ? Math.round((new Date(cur.schedule) - n) / 1000) : null, d = cur.schedule && new Date(cur.schedule), at = d ? `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '';
-    cd.textContent = s == null ? '' : s > 0 ? `定时 ${at}，还有 ${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}` : -s < 3600 ? `${at} 发布，已发 ${Math.floor(-s / 60)} 分钟` : -s < 172800 ? `${at} 发布，已发 ${Math.floor(-s / 3600)} 小时` : `${at} 发布，已发 ${Math.floor(-s / 86400)} 天`;
+    cd.textContent = s == null ? '' : s > 0 ? (s > 86400 ? `定时 ${at}，还有 ${Math.floor(s / 86400)} 天 ${Math.floor(s % 86400 / 3600)} 小时` : `定时 ${at}，还有 ${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}`) : -s < 3600 ? `${at} 发布，已发 ${Math.floor(-s / 60)} 分钟` : -s < 172800 ? `${at} 发布，已发 ${Math.floor(-s / 3600)} 小时` : `${at} 发布，已发 ${Math.floor(-s / 86400)} 天`;
   }
 }
 async function load() {

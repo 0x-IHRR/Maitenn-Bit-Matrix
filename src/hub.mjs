@@ -224,6 +224,27 @@ async function ensureNas() {
   return ok();
 }
 
+// 分发计划：登记一期但不跑，平台状态都是「计划中」。hub run 时照常开跑
+function planDir(dir) {
+  const pj = loadProject(dir);
+  if (getEpisode(pj.id)) return null;
+  upsertEpisode({ id: pj.id, episode: pj.episode, name: pj.name, dir, schedule: pj.schedule || null }); saveSnapshot(pj.id, pj);
+  for (const id of Object.keys(pj.platforms)) setTask(pj.id, id, pj.platforms[id].skip ? 'skipped' : 'planned', pj.platforms[id].skip ? String(pj.platforms[id].skip).slice(0, 80) : '');
+  log(pj.id, '', 'plan', dir); return pj.name;
+}
+// 扫 rootPath 下三层以内的 publish.json：定时在未来、还没登记的，自动进计划
+function scanPlans() {
+  const out = [], walk = (d, depth) => {
+    let ents = []; try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    if (ents.some(e => e.name === 'publish.json')) {
+      try { const pj = loadProject(d); if (pj.schedule && Date.parse(pj.schedule) > Date.now() && !getEpisode(pj.id)) { const n = planDir(d); if (n) out.push(n); } } catch {}
+      return;
+    }
+    if (depth < 3) for (const e of ents) if (e.isDirectory() && !e.name.startsWith('.') && !e.name.startsWith('_')) walk(path.join(d, e.name), depth + 1);
+  };
+  walk(config.rootPath, 0); return out;
+}
+
 // 常驻：每 5 分钟看一眼。到了定时时间自动取链接；你还没点的平台定时提醒并检查
 async function daemon() {
   if (!process.env.HUB_NO_WEB && config.web) { const { startWeb } = await import('./web.mjs'); startWeb(); }
@@ -235,6 +256,7 @@ async function daemon() {
   for (;;) {
     try {
       if (!(await ensureNas()) && every('nasAlert', 60 * MIN)) await notify('⚠️ 麦田读不到 NAS，已尝试自动挂载但没成功');
+      else if (every('scanPlans', 30 * MIN)) { const n = scanPlans(); if (n.length) await notify(`🗓 分发计划新增 ${n.length} 期\n${n.join('\n')}`); }
       for (const ep of episodes()) {
         if (Date.now() - Date.parse(ep.created_at) > 14 * 86400e3) continue;
         const tasks = getTasks(ep.id); if (!tasks.length) continue;
@@ -301,6 +323,10 @@ try {
   else if (cmd === 'doctor') await doctor();
   else if (cmd === 'board') { await drv.ensure(); const r = await boardSync(); console.log(JSON.stringify(r)); }
   else if (cmd === 'metrics') { const list = args[1] ? [getEpisode(args[1])].filter(Boolean) : episodes().filter(e => Date.now() - Date.parse(e.created_at) < 30 * 86400e3); await metricsReport(list); }
+  else if (cmd === 'plan') {   // 只登记、不上传：大屏「分发计划」里先看到这一期
+    if (args[1] && !args[1].startsWith('--')) { const r = planDir(path.resolve(args[1])); console.log(r ? `已登记计划：${r}` : '这一期已经登记过了'); }
+    else { const n = scanPlans(); console.log(`扫描完成，新登记 ${n.length} 期${n.length ? '：' + n.join('、') : ''}`); }
+  }
   else if (cmd === 'adopt') {   // 把已经发过的一期登记进来（不上传），按标题去各平台取链接
     const dir = path.resolve(args[1] || ''), pj = loadProject(dir), ep = { id: pj.id, episode: pj.episode, name: pj.name, dir, schedule: pj.schedule || null };
     upsertEpisode(ep); saveSnapshot(ep.id, pj); for (const id of Object.keys(pj.platforms)) if (!getTask(ep.id, id)) setTask(ep.id, id, 'pending', '登记的往期');
