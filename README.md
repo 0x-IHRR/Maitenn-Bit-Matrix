@@ -1,12 +1,33 @@
-# 麦田 · mdldm-maitian
+<p align="center"><img src="docs/readme/banner.png" alt="麦田 · 给多平台博主的开源工作台" /></p>
 
-**给多平台博主的开源工作台：发得出去、看得清楚、算得出钱。**
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ea44f" alt="MIT" /></a>
+  <img src="https://img.shields.io/badge/macOS-only-1c1a16?logo=apple" alt="macOS" />
+  <img src="https://img.shields.io/badge/Node.js-%E2%89%A5%2022.5-5FA04E?logo=nodedotjs&logoColor=white" alt="Node 22.5+" />
+  <a href="https://github.com/CzzzzzzJ/mdldm-maitian-publisher"><img src="https://img.shields.io/badge/Chrome-麦田发布助手-F2B21B?logo=googlechrome&logoColor=white" alt="麦田发布助手" /></a>
+  <a href="https://github.com/CzzzzzzJ/mdldm-maitian/stargazers"><img src="https://img.shields.io/github/stars/CzzzzzzJ/mdldm-maitian?style=social" alt="Stars" /></a>
+</p>
 
-1. **多平台分发 + 定时**：一期视频分批填好 B站、抖音、小红书、视频号、YouTube、X，提前排进「分发计划」，到点发布、自动取链接。
-2. **多平台数据监控与留存**：每期在每个平台的播放、互动，各平台粉丝，每天自动采、长期留存；手机上看大屏，飞书群推卡片。
-3. **打通你自己的站点，看转化**：哪一期、哪个平台带来了注册和收入。麦田留好了接口，接入你自己的站点后在上面二次开发即可（作者用自己的课程站做了示例）。
+<p align="center">
+  <a href="#一行装好">一行装好</a> ·
+  <a href="#看它跑一遍">看它跑一遍</a> ·
+  <a href="#怎么配合">怎么配合</a> ·
+  <a href="#各平台的坑实战总结">各平台的坑</a> ·
+  <a href="#作者">作者</a>
+</p>
 
-> 作者在用它发「我看谁不学 Grok Bot」等系列视频。它跑在一台常开的 Mac 上，用你自己登录好的浏览器操作各平台，**不存任何平台密码**。
+一个人做内容，要发六七个平台，每个平台的文案、封面、发布形式都不一样；发完还想知道哪期起来了、哪个平台涨粉、哪个平台真的带来了付费。麦田就是我自己每天在用的那套工作台：
+
+1. **发得出去**：一期视频分批填好 B站、抖音、小红书、视频号、YouTube、X，提前排进「分发计划」，到点发布、自动取链接。
+2. **看得清楚**：每期在每个平台的播放、互动，各平台粉丝，每天自动采、长期留存；手机上看大屏，飞书群推卡片。
+3. **算得出钱**：接上你自己的站点，看哪一期、哪个平台带来了注册和收入。
+
+> 跑在一台常开的 Mac 上，用你自己登录好的浏览器操作各平台，**不存任何平台密码**。国内四家只填写不发布，最后一下由你自己点。
+
+## 看它跑一遍
+
+<p align="center"><img src="https://github.com/CzzzzzzJ/mdldm-maitian/releases/download/media/maitian-publish.gif" alt="一期视频的发布流程：Agent 写文案 → 进分发计划 → 插件分批填写各平台 → 国内平台你来点发布 → 到点回填链接" /></p>
+<p align="center"><sub>一期视频从写文案到上线（47 秒，各平台发布页为示意，数据是作者第 4 期的真实文案和封面）· <a href="https://github.com/CzzzzzzJ/mdldm-maitian/releases/download/media/maitian-publish.mp4">高清 MP4</a></sub></p>
 
 <p align="center"><img src="docs/screenshots/board.jpg" alt="麦田大屏：最新一期轮播、粉丝、数据分析、各平台卡片（演示数据）" /></p>
 <p align="center"><sub>大屏（演示数据，<code>node src/demo.mjs</code> 就能看到）</sub></p>
@@ -15,7 +36,9 @@
 |---|---|---|
 | <img src="docs/screenshots/calendar.jpg" alt="日历" /> | <img src="docs/screenshots/episode.jpg" alt="单期复盘" /> | <img src="docs/screenshots/convert.jpg" alt="转化漏斗" /> |
 
-## 工作台由哪几部分组成
+## 怎么配合
+
+<p align="center"><img src="docs/readme/flow.png" alt="发布 skill → 麦田发布助手 → 麦田" /></p>
 
 | 部分 | 做什么 | 在哪 |
 |---|---|---|
@@ -25,7 +48,38 @@
 
 链路：成片 → skill 写「发布素材.md」→ 生成 `publish.json` → `hub plan` 进分发计划 → `hub run` 分批填写 → 国内平台你点发布 → 到点取链接 → 每天采数据 → 大屏和飞书卡片。
 
-## 三级上手
+链路：成片 → skill 写「发布素材.md」→ 生成 `publish.json` → `hub plan` 进分发计划 → `hub run` 分批填写 → 国内平台你点发布 → 到点取链接 → 每天采数据 → 大屏和飞书卡片。
+
+## 一行装好
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/CzzzzzzJ/mdldm-maitian/main/scripts/install.sh)"
+```
+
+下载麦田和发布助手到 `~/maitian/`、接上发布 skill、打开安装向导；向导问完几个问题，生成配置、装好开机自启、打开各平台登录页。需要 macOS、Node.js ≥ 22.5、Google Chrome。
+
+<p align="center"><img src="https://github.com/CzzzzzzJ/mdldm-maitian/releases/download/media/maitian-install.gif" width="720" alt="一行安装演示" /></p>
+
+<details>
+<summary><b>手动安装</b></summary>
+
+或者手动：
+
+需要：macOS、Node.js ≥ 22.5（用到内置 `node:sqlite`）、Google Chrome；可选 NAS（放成片）、飞书群机器人、cloudflared。
+
+```bash
+git clone https://github.com/CzzzzzzJ/mdldm-maitian-publisher.git
+git clone https://github.com/CzzzzzzJ/mdldm-maitian.git && cd mdldm-maitian
+node src/demo.mjs                       # 先用假数据看看效果：http://localhost:8788/?key=demo
+node src/init.mjs                       # 安装向导：检查环境、生成 config.json、装开机自启、打开各平台登录页
+node src/hub.mjs doctor                 # 登录完检查各平台登录态和上传页（不上传、不填写）
+```
+
+打开向导最后给出的地址（`http://localhost:8787/?key=<web.key>`），之后浏览器会记住口令。手动安装也可以：`cp config.example.json config.json` 填好后跑 `scripts/install-launchd.sh`。
+
+</details>
+
+### 三级上手
 
 | 级别 | 你能得到 | 要装的 | 大概时间 |
 |---|---|---|---|
@@ -46,7 +100,18 @@
 - **复盘（数据分析）**：每期发布后第 1/3/7 天自动出复盘卡片：各平台占比、互动率、和上一期同龄对比（第 N 天对第 N 天）、期间涨粉、带来的注册；每周一出周报。网页单期页有同一份复盘表，转化页有每期转化漏斗（播放 → 注册 → 会员 → 收入）。
 - **飞书通知**：开跑、每个平台到位、异常、等你点发布、定时被平台改掉、每日日报、复盘和周报，都是带颜色的卡片。
 
-## 架构
+## 各平台的坑（实战总结）
+
+- **国内四家由你自己点最终发布**。自动化只负责填写和核对，最后一下人点，降低风控风险。
+- **小红书只走最保守的路**：只读页面上已经渲染的内容、像人一样滚动和点击，不在页面里直接调它的接口，低频。
+- **同一条视频每个平台只上传一次**，反复重传最容易触发风控；中控的防重就是为这个。
+- **视频号的定时可能被改**：表单回读是对的，提交后平台记成别的时间（遇到过 +2 小时）。`sync` 会拿平台记录的定时和计划比对，不一致发 ⚠️ 卡片。
+- **YouTube 上传对话框被关掉**时，视频可能已经排好定时；中控会先查 Studio 列表再下结论。
+- **成片必须 faststart**（moov 在文件头），否则小红书报「无视频流信息」、抖音不出表单；校验会拦。
+- **专用 Chrome 卡死**：用 `curl 127.0.0.1:9333/json/close/<id>` 关掉卡住的标签页，不会触发「离开此网站」确认。
+
+<details>
+<summary><b>架构</b></summary>
 
 ```
             ┌────────────── Mac（常开）──────────────┐
@@ -63,29 +128,10 @@ publish.json ─▶│     │  ▲                 ▲                       �
 - 平台填写逻辑在姊妹仓库 [麦田发布助手 mdldm-maitian-publisher](https://github.com/CzzzzzzJ/mdldm-maitian-publisher)（Chrome 插件）里，麦田直接加载它的 `lib/`，适配器只维护一份。`src/chrome-shim.mjs` 在 Node 里模拟插件需要的 `chrome.tabs` / `chrome.debugger`。
 - 发布工程 `publish.json` 由插件仓库的 `tools/make-publish.mjs` 从一份 Markdown 发布素材生成，`tools/validate.mjs` 校验（字数、禁词、封面比例、成片 faststart 等）。
 
-## 安装
+</details>
 
-一行装好（下载麦田和发布助手到 `~/maitian/`、接上发布 skill、打开安装向导）：
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/CzzzzzzJ/mdldm-maitian/main/scripts/install.sh)"
-```
-
-或者手动：
-
-需要：macOS、Node.js ≥ 22.5（用到内置 `node:sqlite`）、Google Chrome；可选 NAS（放成片）、飞书群机器人、cloudflared。
-
-```bash
-git clone https://github.com/CzzzzzzJ/mdldm-maitian-publisher.git
-git clone https://github.com/CzzzzzzJ/mdldm-maitian.git && cd mdldm-maitian
-node src/demo.mjs                       # 先用假数据看看效果：http://localhost:8788/?key=demo
-node src/init.mjs                       # 安装向导：检查环境、生成 config.json、装开机自启、打开各平台登录页
-node src/hub.mjs doctor                 # 登录完检查各平台登录态和上传页（不上传、不填写）
-```
-
-打开向导最后给出的地址（`http://localhost:8787/?key=<web.key>`），之后浏览器会记住口令。手动安装也可以：`cp config.example.json config.json` 填好后跑 `scripts/install-launchd.sh`。
-
-## 命令
+<details>
+<summary><b>命令</b></summary>
 
 ```bash
 node src/hub.mjs plan [工程目录]            # 登记进分发计划（不带目录 = 扫描 rootPath）
@@ -102,7 +148,10 @@ node src/hub.mjs board                      # 同步到飞书多维表格（可�
 node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的就是它）
 ```
 
-## 配置要点（`config.json`）
+</details>
+
+<details>
+<summary><b>配置要点（config.json）</b></summary>
 
 | 项 | 说明 |
 |---|---|
@@ -115,7 +164,10 @@ node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的
 | `board` | 飞书多维表格看板，可选 |
 | `web.key` | 网页口令，所有页面和接口没有口令一律 401 |
 
-## 接入你自己的站点（可选，二次开发）
+</details>
+
+<details>
+<summary><b>接入你自己的站点（可选，二次开发）</b></summary>
 
 不配 `config.site` 就整块关掉，网页上也不显示站点卡片和「转化」页。要看转化：
 
@@ -125,28 +177,38 @@ node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的
 
 作者用自己的课程站做了示例；你的站结构不同，改 `src/site.mjs` 和转化页即可。
 
-## X 长文 + 视频帖引用长文（可选）
+</details>
+
+<details>
+<summary><b>X 长文 + 视频帖引用长文（可选）</b></summary>
 
 发布素材「八、X」里加一行 `**长文：** https://x.com/compose/articles/edit/<id>`（先在 X 建好长文草稿，可用发布助手的 `tools/article.mjs` 把 Obsidian 笔记写进去），生成的 `publish.json` 里 X 会是 `"mode": "article+quote"`。麦田在定时前 25 分钟启动发布助手的 `tools/x-article-quote.mjs`：先上传视频帖，到点发布长文，取到长文链接后贴进视频帖变成引用再发出，结果推飞书。这一步用的是日常 Chrome 里装的发布助手（开发桥 127.0.0.1:8765）。
 
-## 各平台的坑（实战总结）
+</details>
 
-- **国内四家由你自己点最终发布**。自动化只负责填写和核对，最后一下人点，降低风控风险。
-- **小红书只走最保守的路**：只读页面上已经渲染的内容、像人一样滚动和点击，不在页面里直接调它的接口，低频。
-- **同一条视频每个平台只上传一次**，反复重传最容易触发风控；中控的防重就是为这个。
-- **视频号的定时可能被改**：表单回读是对的，提交后平台记成别的时间（遇到过 +2 小时）。`sync` 会拿平台记录的定时和计划比对，不一致发 ⚠️ 卡片。
-- **YouTube 上传对话框被关掉**时，视频可能已经排好定时；中控会先查 Studio 列表再下结论。
-- **成片必须 faststart**（moov 在文件头），否则小红书报「无视频流信息」、抖音不出表单；校验会拦。
-- **专用 Chrome 卡死**：用 `curl 127.0.0.1:9333/json/close/<id>` 关掉卡住的标签页，不会触发「离开此网站」确认。
-
-## 远程访问（可选）
+<details>
+<summary><b>远程访问（可选）</b></summary>
 
 `scripts/install-launchd.sh --tunnel` 会装一个 cloudflared 快速隧道，把 8787 映射成 `https://xxx.trycloudflare.com`，地址变了推飞书。快速隧道重启后地址会变；要固定域名用 Cloudflare 命名隧道。
+
+</details>
 
 ## 数据和隐私
 
 - `config.json`、`data/`（数据库、日志）、`chrome-profile/`（各平台登录态）都不进 git。
 - 麦田只读你自己账号的创作者后台数据，不做互动自动化、不碰别人的账号。
+
+## 作者
+
+<p align="center"><a href="https://www.mdldm.club/ai-course-promotion?utm_source=github&utm_medium=readme&utm_campaign=maitian"><img src="docs/readme/author.png" alt="麦当 mdldm · 0 基础 AI Agent 教学博主 · mdldm.club 知识站" /></a></p>
+
+我是麦当，做 0 基础 AI Agent / AI Coding 教程。麦田是照着我自己的发布流程一点点搭起来的，一边发视频一边在改。
+
+- 📚 **知识站 [mdldm.club](https://www.mdldm.club/ai-course-promotion?utm_source=github&utm_medium=readme&utm_campaign=maitian)**：0 基础 AI Agent 课程 + 每周直播。麦田怎么搭、数据怎么采、怎么接自己的项目，课里讲得更细。
+- 🎬 B站 / 小红书 / 抖音 / 视频号：搜「麦当mdldm」
+- ▶️ [YouTube](https://www.youtube.com/channel/UCOz23ZQMefLAgDdnraGV2RQ) · 𝕏 [@czzzzzzJ_](https://x.com/czzzzzzJ_)
+
+觉得有用就点个 ⭐ Star，这是我继续改下去的动力；遇到问题直接提 [Issue](https://github.com/CzzzzzzJ/mdldm-maitian/issues)。
 
 ## License
 
