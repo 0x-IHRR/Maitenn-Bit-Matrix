@@ -65,6 +65,14 @@ publish.json ─▶│     │  ▲                 ▲                       �
 
 ## 安装
 
+一行装好（下载麦田和发布助手到 `~/maitian/`、接上发布 skill、打开安装向导）：
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/CzzzzzzJ/mdldm-maitian/main/scripts/install.sh)"
+```
+
+或者手动：
+
 需要：macOS、Node.js ≥ 22.5（用到内置 `node:sqlite`）、Google Chrome；可选 NAS（放成片）、飞书群机器人、cloudflared。
 
 ```bash
