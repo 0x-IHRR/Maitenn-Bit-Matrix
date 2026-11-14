@@ -136,3 +136,18 @@ summary .lg{--s:24px}summary b{width:70px;font-weight:600;flex:none}summary span
 
 .st-chip.planned{background:transparent;color:var(--t2);box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}.st-chip.planned i{background:transparent;color:var(--t3)}
 .fnl{display:block;height:4px;border-radius:2px;background:var(--bg);margin-top:4px}.fnl i{display:block;height:100%;border-radius:2px}
+
+/* 日历 */
+.cal{padding:0;overflow:hidden}.cal-h,.cal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.cal-h div{padding:10px 12px;font-size:12px;color:var(--t3);border-bottom:1px solid rgba(0,0,0,.06)}
+.cal-d{min-height:118px;padding:8px;border-right:1px solid rgba(0,0,0,.05);border-bottom:1px solid rgba(0,0,0,.05);display:flex;flex-direction:column;gap:6px}
+.cal-d:nth-child(7n){border-right:0}.cal-d.past{background:rgba(0,0,0,.015)}.cal-d.past .cal-n{color:var(--t3)}
+.cal-d.today{background:rgba(0,113,227,.05)}.cal-n{font-size:13px;font-weight:600;color:var(--t2)}.cal-n span{margin-left:6px;font-size:11px;color:#fff;background:var(--accent);padding:1px 7px;border-radius:999px}
+.cal-e{display:flex;gap:7px;align-items:center;text-decoration:none;color:var(--t1);background:#fff;border-radius:10px;padding:5px;box-shadow:0 1px 3px rgba(0,0,0,.08),inset 0 0 0 1px rgba(0,0,0,.04)}
+.cal-e:hover{box-shadow:0 4px 12px rgba(0,0,0,.12)}.cal-e img{width:30px;height:40px;object-fit:cover;border-radius:5px;flex:none}
+.cal-e div{min-width:0}.cal-e b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cal-e span{font-size:11px;color:var(--t3);white-space:nowrap}
+.cal-e span i,.cal-lg i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:#c7c7cc}
+.cal-e.ok span i,.cal-lg i.ok{background:#30d158}.cal-e.sch span i,.cal-lg i.sch{background:#0a84ff}.cal-e.todo span i,.cal-lg i.todo{background:#ff9f0a}.cal-e.bad span i,.cal-lg i.bad{background:#ff3b30}.cal-e.plan span i,.cal-lg i.plan{background:transparent;box-shadow:inset 0 0 0 1.5px #8e8e93}
+.cal-e.plan{background:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.cal-lg{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--t2)}
+@media (max-width:760px){.cal-d{min-height:84px;padding:5px}.cal-e img{display:none}.cal-e b{font-size:11px}.cal-e span{display:none}}

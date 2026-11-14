@@ -46,6 +46,7 @@ function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1
 function drawFans(el, days, marks) {
   const w = el.clientWidth, h = el.clientHeight; if (w < 60 || h < 60) return;
   const L = 40, R = 6, T = 20, B = 20, n = days.length, pw = w - L - R, ph = h - T - B, band = pw / n, bw = Math.min(22, Math.max(3, band - 4));
+  drawFans.lastLab = -1e9;
   const rows = days.map(d => ({ d, segs: FANP.map(p => ({ p, v: Math.max(0, netOn(p, d) || 0) })).filter(x => x.v > 0) }));
   rows.forEach(r => r.tot = r.segs.reduce((s, x) => s + x.v, 0));
   const top = niceMax(Math.max(...rows.map(r => r.tot), 1)), Y = (v) => T + ph - v / top * ph;
@@ -56,7 +57,9 @@ function drawFans(el, days, marks) {
     r.segs.forEach((g, j) => { const y1 = Y(acc), y2 = Y(acc + g.v), hh = Math.max(1.5, y1 - y2 - (j < r.segs.length - 1 ? 2 : 0)); acc += g.v;
       s += `<rect class="bar" style="animation-delay:${i * 16}ms" x="${x.toFixed(1)}" y="${(y1 - (y1 - y2)).toFixed(1)}" width="${bw.toFixed(1)}" height="${hh.toFixed(1)}" rx="${j === r.segs.length - 1 ? Math.min(4, bw / 2) : 1.5}" fill="url(#fg-${g.p})"/>`; });
     let mk = marks[r.d]; const nx = rows[i + 1] && marks[rows[i + 1].d], pv = rows[i - 1] && marks[rows[i - 1].d];
-    const lab = !mk || nx ? '' : pv ? pv + ' / ' + mk : mk;
+    let lab = !mk || nx ? '' : pv ? pv + ' / ' + mk : mk;
+    // 发布日一多标签会叠在一起：离上一个标签不到 130px 就只画虚线不写字（悬停仍能看到）
+    const cx = x + bw / 2; if (lab && cx - (drawFans.lastLab ?? -1e9) < 130) lab = ''; else if (lab) { drawFans.lastLab = cx; if (lab.length > 14) lab = lab.slice(0, 13) + '…'; }
     if (mk) s += `<line x1="${(x + bw / 2).toFixed(1)}" x2="${(x + bw / 2).toFixed(1)}" y1="${T - 6}" y2="${T + ph}" stroke="#0071e3" stroke-opacity=".45" stroke-dasharray="3 3"/><text x="${(x + bw / 2).toFixed(1)}" y="${T - 9}" text-anchor="${i > n - 3 ? 'end' : 'middle'}" style="fill:var(--accent);font-weight:600">${esc(lab)}</text>`;
     if ((i % 5 === 0 && n - 1 - i > 4) || i === n - 1) s += `<text x="${(x + bw / 2).toFixed(1)}" y="${h - 5}" text-anchor="${i === n - 1 ? 'end' : 'middle'}">${r.d.slice(5)}</text>`;
     s += `<rect x="${(L + i * band).toFixed(1)}" y="${T}" width="${band.toFixed(1)}" height="${ph}" fill="transparent" data-tip="${r.d.slice(5)}${mk ? '  ' + esc(mk) + ' 发布' : ''}\n${r.segs.length ? r.segs.map(g => PN[g.p] + '  +' + fmt(g.v)).join('\n') + '\n合计  +' + fmt(r.tot) : '没有记录'}"/>`;
@@ -163,7 +166,7 @@ function render() {
   const f0 = O.feed[0];
   $('#screen').innerHTML = `
   <div class="top"><div class="logo">麦<i>田</i></div><div class="tag">内容与粉丝监控</div>
-    <div class="nav"><a class="on" href="/">大屏</a><a href="/p#/traffic">流量</a>${O.siteOn ? '<a href="/p#/convert">转化</a>' : ''}<a href="/p#/archive">档案</a><a href="/p#/system">系统</a></div>
+    <div class="nav"><a class="on" href="/">大屏</a><a href="/p#/traffic">流量</a><a href="/p#/calendar">日历</a>${O.siteOn ? '<a href="/p#/convert">转化</a>' : ''}<a href="/p#/archive">档案</a><a href="/p#/system">系统</a></div>
     <div class="lights"><span class="light ok">守护进程 运行中</span><span class="light ${h.nas ? 'ok' : 'bad'}">NAS ${h.nas ? '已挂载' : '读不到'}</span><span class="light ${h.chrome ? 'ok' : 'bad'}">专用浏览器 ${h.chrome ? '在线' : '没开'}</span>
       <span class="light ${!loginOk ? 'bad' : checked ? 'ok' : 'warn'}">平台登录 ${!loginOk ? '有掉线' : checked ? '今日已检' : '今天还没检'}</span></div>
     <div class="clock" id="clock"></div></div>

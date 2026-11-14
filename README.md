@@ -8,6 +8,13 @@
 
 > 作者在用它发「我看谁不学 Grok Bot」等系列视频。它跑在一台常开的 Mac 上，用你自己登录好的浏览器操作各平台，**不存任何平台密码**。
 
+<p align="center"><img src="docs/screenshots/board.jpg" alt="麦田大屏：最新一期轮播、粉丝、数据分析、各平台卡片（演示数据）" /></p>
+<p align="center"><sub>大屏（演示数据，<code>node src/demo.mjs</code> 就能看到）</sub></p>
+
+| 日历：分发计划 | 单期复盘：同龄对比 | 每期转化漏斗 |
+|---|---|---|
+| <img src="docs/screenshots/calendar.jpg" alt="日历" /> | <img src="docs/screenshots/episode.jpg" alt="单期复盘" /> | <img src="docs/screenshots/convert.jpg" alt="转化漏斗" /> |
+
 ## 工作台由哪几部分组成
 
 | 部分 | 做什么 | 在哪 |
@@ -34,6 +41,7 @@
   - 防重：库里已经到位的平台不再跑；X 定时列表、YouTube Studio、站点后台已有同名的不再传。
 - **长势（流量和粉丝）**：每天上午采一次各期在各平台的播放和互动、各平台粉丝数；新一期头三天每 6 小时采一次。
 - **收成（转化，可选）**：接上自有站点后，看注册、会员、订单、收入从哪个渠道、哪一期来。
+- **日历**：上周到未来两周，已发布、已定时、等你点、计划中的期一眼看清。
 - **粮仓（档案）**：每期的封面、文案快照、各平台链接、过程日志。
 - **复盘（数据分析）**：每期发布后第 1/3/7 天自动出复盘卡片：各平台占比、互动率、和上一期同龄对比（第 N 天对第 N 天）、期间涨粉、带来的注册；每周一出周报。网页单期页有同一份复盘表，转化页有每期转化漏斗（播放 → 注册 → 会员 → 收入）。
 - **飞书通知**：开跑、每个平台到位、异常、等你点发布、定时被平台改掉、每日日报、复盘和周报，都是带颜色的卡片。
@@ -62,13 +70,12 @@ publish.json ─▶│     │  ▲                 ▲                       �
 ```bash
 git clone https://github.com/CzzzzzzJ/mdldm-maitian-publisher.git
 git clone https://github.com/CzzzzzzJ/mdldm-maitian.git && cd mdldm-maitian
-cp config.example.json config.json      # 填 pluginDir、rootPath、feishuWebhook、web.key……
-node src/hub.mjs login                  # 打开专用 Chrome 和各平台页面，逐个扫码 / 登录
-node src/hub.mjs doctor                 # 检查各平台登录态和上传页（不上传、不填写）
-scripts/install-launchd.sh              # 装成开机自启的守护进程（加 --tunnel 顺带装远程访问）
+node src/demo.mjs                       # 先用假数据看看效果：http://localhost:8788/?key=demo
+node src/init.mjs                       # 安装向导：检查环境、生成 config.json、装开机自启、打开各平台登录页
+node src/hub.mjs doctor                 # 登录完检查各平台登录态和上传页（不上传、不填写）
 ```
 
-打开 `http://localhost:8787/?key=<web.key>`，之后浏览器会记住口令。
+打开向导最后给出的地址（`http://localhost:8787/?key=<web.key>`），之后浏览器会记住口令。手动安装也可以：`cp config.example.json config.json` 填好后跑 `scripts/install-launchd.sh`。
 
 ## 命令
 
@@ -109,6 +116,10 @@ node src/hub.mjs daemon                     # 常驻（install-launchd.sh 装的
 3. 在 `config.site` 里填站点地址和接口路径。
 
 作者用自己的课程站做了示例；你的站结构不同，改 `src/site.mjs` 和转化页即可。
+
+## X 长文 + 视频帖引用长文（可选）
+
+发布素材「八、X」里加一行 `**长文：** https://x.com/compose/articles/edit/<id>`（先在 X 建好长文草稿，可用发布助手的 `tools/article.mjs` 把 Obsidian 笔记写进去），生成的 `publish.json` 里 X 会是 `"mode": "article+quote"`。麦田在定时前 25 分钟启动发布助手的 `tools/x-article-quote.mjs`：先上传视频帖，到点发布长文，取到长文链接后贴进视频帖变成引用再发出，结果推飞书。这一步用的是日常 Chrome 里装的发布助手（开发桥 127.0.0.1:8765）。
 
 ## 各平台的坑（实战总结）
 

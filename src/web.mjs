@@ -79,7 +79,7 @@ async function handle(req, res) {
     if (u.pathname === '/shot') f = path.join(ep.dir, '发布档案', `${(u.searchParams.get('p') || '').replace(/\W/g, '')}.jpg`);
     else { const pj = readPj(ep.dir) || {}; const rel = (pj.covers || {})[u.searchParams.get('k') || '4x3'] || Object.values(pj.covers || {})[0]; f = rel && path.join(ep.dir, rel); }
     if (!f || !f.startsWith(ep.dir) || !fs.existsSync(f)) return send(res, 404, '');
-    return send(res, 200, fs.readFileSync(f), /\.png$/.test(f) ? 'image/png' : 'image/jpeg', { 'cache-control': 'max-age=300' });
+    return send(res, 200, fs.readFileSync(f), /\.png$/.test(f) ? 'image/png' : /\.svg$/.test(f) ? 'image/svg+xml' : 'image/jpeg', { 'cache-control': 'max-age=300' });
   }
   if (u.pathname === '/api/action' && req.method === 'POST') {
     let body = ''; req.on('data', d => body += d); req.on('end', () => {

@@ -1,6 +1,8 @@
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'));
+const CFG = process.env.MAITIAN_CONFIG || path.join(ROOT, 'config.json');
+if (!fs.existsSync(CFG)) { console.error('还没有 config.json：先运行 node src/init.mjs（安装向导），或者 node src/demo.mjs 用假数据看看效果'); process.exit(1); }
+export const config = JSON.parse(fs.readFileSync(CFG, 'utf8'));
 
 // ---------- 文字 → 飞书卡片（2026-11-14） ----------
 // 调用方仍然传文字：第一行当标题，开头的表情决定卡片颜色；「平台：状态（说明） 链接」这种行排成带颜色的状态行。
