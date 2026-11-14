@@ -27,21 +27,29 @@ const LOCK = fam.startsWith('accessory');
 // ───── 取数据和图片（失败时用上一次的缓存） ─────
 const fm = FileManager.local(), dir = fm.cacheDirectory(), cache = n => fm.joinPath(dir, `maitian-${n}`);
 const api = (p) => `${MAITIAN}${p}${p.includes('?') ? '&' : '?'}t=${encodeURIComponent(TOKEN)}`;
-let data = null, stale = false;
-try {
-  const r = new Request(api('/api/widget')); r.timeoutInterval = 15;
-  data = await r.loadJSON();
-  if (!data || !data.fans) throw new Error(data && data.error || '没有数据');
-  fm.writeString(cache('data.json'), JSON.stringify(data));
-} catch (e) {
-  stale = true;
-  try { data = JSON.parse(fm.readString(cache('data.json'))); } catch { data = null; }
+// 小组件每次刷新只有约 30 秒：数据、头像、封面同时请求，每个最多等 8 秒；拉不到就用上次的缓存
+const T = 8;
+async function getData() {
+  try {
+    const r = new Request(api('/api/widget')); r.timeoutInterval = T;
+    const d = await r.loadJSON();
+    if (!d || !d.fans) throw new Error(d && d.error || '没有数据');
+    fm.writeString(cache('data.json'), JSON.stringify(d));
+    return { d, stale: false };
+  } catch (e) {
+    try { return { d: JSON.parse(fm.readString(cache('data.json'))), stale: true }; } catch { return { d: null, stale: true }; }
+  }
 }
 async function img(k, w = 400) {
   const f = cache(`${k}.jpg`);
-  if (!stale) { try { const r = new Request(api(`/api/widget/img?k=${k}&w=${w}`)); r.timeoutInterval = 15; const i = await r.loadImage(); fm.writeImage(f, i); return i; } catch {} }
+  try { const r = new Request(api(`/api/widget/img?k=${k}&w=${w}`)); r.timeoutInterval = T; const i = await r.loadImage(); fm.writeImage(f, i); return i; } catch {}
   try { return fm.fileExists(f) ? fm.readImage(f) : null; } catch { return null; }
 }
+const [{ d: data, stale }, AVATAR_IMG, COVER_IMG] = await Promise.all([
+  getData(),
+  LOCK ? null : img('avatar', 200),
+  LOCK || fam === 'small' ? null : img('4x3', 480),
+]);
 
 // ───── 麦苗（像素画），没有头像时用它 ─────
 function maimiao(px = 6) {
@@ -124,8 +132,8 @@ const bgGradient = () => { const g = new LinearGradient(); g.colors = [C.bg1, C.
 const w = new ListWidget();
 w.url = MAITIAN;
 w.refreshAfterDate = new Date(Date.now() + 20 * 60e3);
-const AVATAR = data && data.avatar && !LOCK ? await img('avatar', 200) : null;
-const COVER = data && data.latest && !LOCK && fam !== 'small' ? await img('4x3', 480) : null;
+const AVATAR = data && data.avatar ? AVATAR_IMG : null;
+const COVER = data && data.latest ? COVER_IMG : null;
 
 if (!data) {
   w.backgroundGradient = bgGradient();
