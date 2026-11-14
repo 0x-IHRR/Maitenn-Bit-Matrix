@@ -15,7 +15,8 @@ rl.on('close', () => { closed = true; while (waiters.length) waiters.shift()('')
 const readLine = () => lines.length ? Promise.resolve(lines.shift()) : closed ? Promise.resolve('') : new Promise(r => waiters.push(r));
 const prompt = async (q) => { process.stdout.write(q); const l = await readLine(); if (!process.stdin.isTTY) process.stdout.write(l + '\n'); return l; };
 const ask = async (q, def = '') => (await prompt(`${q}${def ? `（回车用：${def}）` : ''}\n> `)).trim() || def;
-const yes = async (q, def = true) => /^(y|yes|是|好)$/i.test((await prompt(`${q} ${def ? '[Y/n]' : '[y/N]'} `)).trim() || (def ? 'y' : 'n'));
+// 非终端（管道或无输入）时默认一律「否」，免得误装开机自启
+const yes = async (q, def = true) => { def = def && !!process.stdin.isTTY; const a = (await prompt(`${q} ${def ? '[Y/n]' : '[y/N]'} `)).trim() || (def ? 'y' : 'n'); return /^(y|yes|是|好)$/i.test(a); };
 const ok = (t) => console.log(`  ✅ ${t}`), bad = (t) => console.log(`  ❌ ${t}`), tip = (t) => console.log(`  ·  ${t}`);
 const home = (p) => p.replace(/^~(?=\/|$)/, os.homedir());
 
