@@ -7,7 +7,7 @@ const TOKEN = '__WIDGET_TOKEN__';
 const fm = FileManager.local(), CORE = fm.joinPath(fm.documentsDirectory(), 'maitian-core.js');
 let code = null;
 try {
-  const r = new Request(`${MAITIAN}/api/widget/code?t=${encodeURIComponent(TOKEN)}`); r.timeoutInterval = 12;
+  const r = new Request(`${MAITIAN}/api/widget/code?t=${encodeURIComponent(TOKEN)}`); r.timeoutInterval = 6;
   code = await r.loadString();
   if (r.response.statusCode !== 200 || !/Script\.complete\(\)/.test(code)) throw new Error('代码不完整');
   fm.writeString(CORE, code);
