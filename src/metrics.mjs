@@ -49,6 +49,13 @@ export const collectors = {
     const g = (k) => num((label.match(new RegExp('([\\d,.]+[KM]?)\\s+' + k, 'i')) || [])[1]) ?? 0;
     return { views: g('views?'), likes: g('likes?'), comments: g('repl(?:y|ies)'), favorites: g('bookmarks?'), shares: g('reposts?') };
   },
+  async instagram({ url }) {   // 在自己登录的页面里读这条 Reels 的作品信息（播放、赞、评论、转发）
+    const sc = idOf(url, /\/reel\/([\w-]+)/); if (!sc) return null;
+    const m = await withTab(url, (t) => evaluate(t, `(async()=>{const A='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';let pk=0n;for(const c of ${J(sc)})pk=pk*64n+BigInt(A.indexOf(c));
+      const r=await fetch('/api/v1/media/'+pk+'/info/',{credentials:'include',headers:{'X-IG-App-ID':'936619743392459'}});if(!r.ok)return null;const it=((await r.json()).items||[])[0];
+      return it?{views:it.play_count??it.ig_play_count,likes:it.like_count,comments:it.comment_count,shares:it.reshare_count}:null})()`), { wait: 6000 });
+    return m && { views: m.views ?? null, likes: m.likes ?? null, comments: m.comments ?? null, shares: m.shares ?? null };
+  },
   async zsz({ url, p }) {
     const id = idOf(url, /courseId=(\w+)/);
     if (!SITE) return null;
