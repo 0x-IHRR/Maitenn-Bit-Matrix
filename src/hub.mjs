@@ -6,6 +6,7 @@
 //   hub status [id] [--logs]                    看状态
 //   hub sync <id> [--only a,b]                  取链接、更新状态，写回发布记录
 //   hub mark <id> <平台> <状态> [备注] [--url 链接]   人工改状态
+//   hub submit <id> <instagram|youtube|x>      中控卡住时，把已填好的发帖页单独提交一次（先查重）
 //   hub adopt <工程目录>                         登记一期已发过的（不上传）
 //   hub metrics [id]                            采集流量并发日报
 //   hub daemon                                  常驻：到点自动取链接、提醒还没点发布的平台
@@ -24,7 +25,7 @@ const args = process.argv.slice(2), cmd = args[0];
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const ZSZ_LEAD = 30;   // 知识站建课提前量（分钟）：上传 + 转码约 10 分钟
 const strip = (s) => String(s || '').replace(/ *\d+%/, '');
-const mapState = (s) => s === '待你发布' ? 'filled' : s === '异常' || s === '上传超时' ? 'failed' : s === '未登录' ? 'not_logged_in' : s === '已停止' ? 'stopped' : s === '跳过' ? 'skipped' : 'running';
+const mapState = (s) => s === '待你发布' || s === '已填写' ? 'filled' : s === '异常' || s === '上传超时' ? 'failed' : s === '未登录' ? 'not_logged_in' : s === '已停止' ? 'stopped' : s === '跳过' ? 'skipped' : 'running';
 const loadProject = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'publish.json'), 'utf8'));
 const projectOf = (ep, pj) => ({ dir: path.relative(config.rootPath, ep.dir), data: pj });
 const ALL = ['bilibili', 'xhs', 'douyin', 'channels', 'youtube', 'x', 'instagram', 'zsz'].filter(id => id !== 'zsz' || SITE);   // 没配自有站点就不管 zsz
@@ -75,6 +76,37 @@ async function after(ep, pj, id, res) {
   } catch (e) { setTask(ep.id, id, 'awaiting_user', `自动步骤出错：${e.message}`); await notify(`⚠️ ${ep.name}\n${NAMES[id]} 自动步骤出错：${e.message}`); }
 }
 
+// hub submit <id> <平台>：中控卡住时，把专用 Chrome 里已经填好的发帖页单独提交一次（只限 X / YouTube / Instagram）
+// 先查重，页面必须恰好一个，然后走和自动流程一样的 after()：存档截图 → 核对 → 点一次 → 记状态
+const SUBMIT_PAGES = {
+  instagram: [/instagram\.com/, `!!document.querySelector('[role=dialog] [contenteditable=true]')`],
+  youtube: [/studio\.youtube\.com/, `!!document.querySelector('ytcp-uploads-dialog')`],
+  x: [/(x|twitter)\.com/, `!!document.querySelector('[data-testid=tweetTextarea_0]')`],
+};
+const refuse = (m) => Object.assign(new Error(m), { quiet: true });   // 拒绝提交是正常保护，不发飞书
+async function submitOne() {
+  const ep = getEpisode(args[1]), id = args[2];
+  if (!ep) throw refuse('没有这一期，先 hub status 看 id');
+  if (!SUBMIT_PAGES[id]) throw refuse(`hub submit 只支持 ${Object.keys(SUBMIT_PAGES).join(' / ')}；国内平台由你自己点发布`);
+  const pj = loadProject(ep.dir), p = pj.platforms[id];
+  if (!p || p.skip) throw refuse(`publish.json 里没有 ${id}，或已设 skip`);
+  const t = getTask(ep.id, id);
+  if (t && ['scheduled', 'published'].includes(t.state)) throw refuse(`${NAMES[id]} 已经是「${STATE_CN[t.state]}」，不再提交`);
+  await drv.ensure();
+  if (id === 'instagram' && await igExisting(p.caption, pj.schedule).catch(() => null)) throw refuse('Instagram 上已经有这一期（定时内容或主页），不再提交');
+  if (id === 'x' && await xExisting(p.text).catch(() => null)) throw refuse('X 上已经有这条，不再提交');
+  if (id === 'youtube') { const rows = await ytRows(p.title).catch(() => null); if (rows && (rows.length > 1 || rows.some(r => !/草稿|待处理|上传|处理中/.test(r)))) throw refuse(`YouTube Studio 里已有：${rows.join('；')}，不再提交`); }
+  const [re, ready] = SUBMIT_PAGES[id], cands = [];
+  for (const tab of await drv.adoptTabs(re)) if (await drv.evaluate(tab, ready).catch(() => false)) cands.push(tab);
+  if (cands.length !== 1) throw refuse(`专用 Chrome 里填好的 ${NAMES[id]} 发帖页有 ${cands.length} 个，要恰好 1 个才提交`);
+  log(ep.id, id, 'manual-submit', `tab ${cands[0]}`);
+  await after(ep, pj, id, { state: 'filled', tabId: cands[0] });
+  const now = getTask(ep.id, id);
+  console.log(`${NAMES[id]}：${STATE_CN[now.state] || now.state}${now.detail ? `（${now.detail}）` : ''}`);
+  if (['scheduled', 'published'].includes(now.state)) await notify(`✅ ${ep.name}\n${NAMES[id]}（hub submit）：${STATE_CN[now.state]}${now.detail ? `，${now.detail}` : ''}`);
+  await board({ site: false }).catch(() => {});
+}
+
 async function run() {
   const dir = path.resolve(args[1] || '');
   if (!fs.existsSync(path.join(dir, 'publish.json'))) throw new Error(`${dir} 里没有 publish.json`);
@@ -106,7 +138,7 @@ async function run() {
     if (rows.length === 1 && /已安排|定时|首播|公开/.test(rows[0]) && !/草稿|待处理/.test(rows[0])) setTask(ep.id, 'youtube', /已安排|定时|首播/.test(rows[0]) ? 'scheduled' : 'published', rows[0].replace(/ https:\S+/, ''), { url });
     else { setTask(ep.id, 'youtube', 'awaiting_user', `Studio 里已有 ${rows.length} 条同标题视频：${rows.join('；')}`); await notify(`⚠️ ${ep.name}\nYouTube Studio 里已有同标题视频（${rows.join('；')}），没有再上传，请先处理`); }
   } }
-  if (todo.includes('instagram')) { const e = await igExisting(pj.platforms.instagram.caption).catch(() => null); if (e) { setTask(ep.id, 'instagram', e.state, e.detail, { url: e.url }); todo = todo.filter(i => i !== 'instagram'); console.log('Instagram 上已经有这一期，跳过'); } }
+  if (todo.includes('instagram')) { const e = await igExisting(pj.platforms.instagram.caption, pj.schedule).catch(() => null); if (e) { setTask(ep.id, 'instagram', e.count > 1 ? 'awaiting_user' : e.state, e.detail, { url: e.url }); todo = todo.filter(i => i !== 'instagram'); console.log('Instagram 上已经有这一期，跳过'); if (e.count > 1) await notify(`⚠️ ${ep.name}\nInstagram ${e.detail}，请去定时内容里删掉多余的`); } }
   if (todo.includes('zsz')) { const cs = await zszCourses(pj.platforms.zsz.title).catch(() => []); if (cs.length) { setTask(ep.id, 'zsz', cs[0].vis === 'published' ? 'published' : 'scheduled', '后台已有同名课程', { url: SITE.courseUrl(cs[0]) }); todo = todo.filter(i => i !== 'zsz'); } }
   // 知识站没有定时：建课转码完就直接上线、发 VIP 群通知。定时发布的期推迟到定时前 ZSZ_LEAD 分钟由守护进程建课
   //（2026-11-12 第 37 期提前将近一天上线）
@@ -118,6 +150,14 @@ async function run() {
   if (!todo.length) { await notify(`📋 ${ep.name}\n本轮没有需要现在上传的平台\n${table(ep.id)}`); return; }
 
   for (const id of todo) setTask(ep.id, id, 'pending', '');
+  // 开跑前先查登录（2026-11-15 视频号到开跑才发现掉线，扫码耽误十几分钟）：掉线的立刻发飞书，其他平台照跑，扫完码本轮末尾自动补跑
+  let loggedOut = [];
+  try {
+    await drv.ensure();
+    const lr = await drv.checkLogin(todo.filter(i => i !== 'zsz'));
+    loggedOut = todo.filter(i => i !== 'zsz' && lr[i] && !lr[i].ok);
+    if (loggedOut.length) await notify(`🔑 ${ep.name}\n这些平台没登录：${loggedOut.map(i => NAMES[i]).join('、')}\n请现在在专用 Chrome 里扫码，其他平台先跑；扫完 20 分钟内会自动补跑\n${loggedOut.map(i => LOGIN_PAGES[i]).join('\n')}`);
+  } catch (e) { console.error('开跑前登录检查出错：' + e.message); }
   await notify(`🚀 开始发布：${ep.name}\n定时：${pj.schedule ? pj.schedule.replace('T', ' ').slice(0, 16) : '立即'}\n本轮：${todo.map(i => NAMES[i]).join('、')}\n顺序：${config.batches.map(b => b.filter(i => todo.includes(i)).map(i => NAMES[i]).join('+')).filter(Boolean).join(' → ')}`);
 
   const pending = [];
@@ -133,6 +173,21 @@ async function run() {
     }));
   }
   await Promise.all(pending);
+  // 补跑开跑时没登录的平台：每分钟查一次登录，最多 20 分钟
+  let retry = loggedOut.filter(i => getTask(ep.id, i)?.state === 'not_logged_in');
+  for (let k = 0; retry.length && k < 20; k++) {
+    await drv.sleep(60000);
+    const lr = await drv.checkLogin(retry).catch(() => ({}));
+    const ok = retry.filter(i => lr[i] && lr[i].ok);
+    if (!ok.length) continue;
+    retry = retry.filter(i => !ok.includes(i));
+    let res; try { res = await runBatch(ep, pj, ok); } catch (e) { for (const id of ok) setTask(ep.id, id, 'failed', e.message); continue; }
+    await Promise.all(ok.filter(id => res[id]).map(id => after(ep, pj, id, res[id]).then(async () => {
+      const t = getTask(ep.id, id);
+      if (['awaiting_user', 'scheduled', 'published'].includes(t.state)) await notify(`${t.state === 'awaiting_user' ? '👉' : '✅'} ${ep.name}\n${NAMES[id]}（扫码后补跑）：${STATE_CN[t.state]}${t.detail ? `，${t.detail}` : ''}${t.url ? `\n${t.url}` : ''}`);
+    })));
+  }
+  if (retry.length) await notify(`⚠️ ${ep.name}\n${retry.map(i => NAMES[i]).join('、')} 20 分钟内还没登录，没补跑；登录后运行 hub run <目录> --only ${retry.join(',')}`);
   await notify(`📋 ${ep.name} 本轮结束\n${table(ep.id)}`);
   await board({ site: false });
 }
@@ -338,6 +393,16 @@ async function daemon() {
         try { const R = await import('./review.mjs'); for (const t of R.due((k) => { if (getMeta(k)) return false; setMeta(k, Date.now()); return true; })) await notify(t); }
         catch (e) { console.error('复盘出错：' + e.message); }
       }
+      // 发布前一晚 20 点后：第二天要发、还没开跑的期，先查一遍登录，掉线的今晚就扫码
+      for (const ep of episodes()) {
+        const sched = ep.schedule ? Date.parse(ep.schedule) : 0;
+        if (!sched || new Date().getHours() < 20 || sched - Date.now() < 6 * 3600e3 || sched - Date.now() > 30 * 3600e3) continue;
+        if (!getTasks(ep.id).some(t => t.state === 'planned') || getMeta(`eve:${ep.id}`)) continue;
+        setMeta(`eve:${ep.id}`, Date.now());
+        const bad = await doctor().catch(() => null);
+        if (bad && !bad.length) await notify(`🌙 ${ep.name}\n明天 ${ep.schedule.slice(11, 16)} 发布，${ALL.length} 个平台登录都正常`);
+        else if (bad) await notify(`🌙 ${ep.name}\n明天 ${ep.schedule.slice(11, 16)} 发布，今晚先把这些平台登录好：${bad.map(i => NAMES[i]).join('、')}`);
+      }
       // 每天上午体检一次，有平台掉线才通知
       const day = new Date().toLocaleDateString('zh-CN');
       if (new Date().getHours() >= 9 && getMeta('doctorDay') !== day) { setMeta('doctorDay', day); await doctor().catch((e) => console.error('体检出错：' + e.message)); }
@@ -349,6 +414,7 @@ async function daemon() {
 let code = 0;
 try {
   if (cmd === 'run') await run();
+  else if (cmd === 'submit') await submitOne();
   else if (cmd === 'sync') { const ep = getEpisode(args[1]); if (!ep) throw new Error('没有这一期，先 hub status 看 id'); await sync(ep, opt('--only') ? opt('--only').split(',') : null); }
   else if (cmd === 'doctor') await doctor();
   else if (cmd === 'board') { await drv.ensure(); const r = await boardSync(); console.log(JSON.stringify(r)); }
@@ -377,6 +443,6 @@ try {
     for (const e of list) { console.log(`\n【${e.id}】${e.name}  定时 ${e.schedule || '立即'}\n${table(e.id)}`); if (args.includes('--logs')) console.log(recentLogs(e.id).map(l => `  ${l.ts.slice(11, 19)} ${l.platform} ${l.action} ${l.result}`).join('\n')); }
   } else if (cmd === 'mark') { setTask(args[1], args[2], args[3], (args[4] && !args[4].startsWith('--') ? args[4] : '人工标记'), { url: opt('--url') || undefined }); log(args[1], args[2], 'mark', args[3]); console.log(table(args[1])); }
   else if (cmd === 'notify-test') await notify('发布中控已接通 ✅');
-  else console.log('用法：hub login | doctor | run <工程目录> [--only a,b] [--force] | status [id] [--logs] | sync <id> | mark <id> <平台> <状态> | daemon');
-} catch (e) { console.error('出错：' + e.message); await notify(`❌ 发布中控出错：${e.message.slice(0, 300)}`); code = 1; }
+  else console.log('用法：hub login | doctor | run <工程目录> [--only a,b] [--force] | status [id] [--logs] | sync <id> | mark <id> <平台> <状态> | submit <id> <instagram|youtube|x> | daemon');
+} catch (e) { console.error('出错：' + e.message); if (!e.quiet) await notify(`❌ 发布中控出错：${e.message.slice(0, 300)}`); code = 1; }
 await drv.close(); db.close(); process.exit(code);

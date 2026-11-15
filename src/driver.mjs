@@ -22,6 +22,8 @@ export async function click(tabId, expr) {
   if (mode === 'plugin') return bridge.evaluate(tabId, `(()=>{const e=${expr};if(!e)return false;e.click();return true})()`);
   return (await load()).cdp.click(tabId, expr);
 }
+// 认领已开着的页面（hub submit 用）；插件方式不支持
+export async function adoptTabs(re) { if (mode === 'plugin') throw new Error('插件方式不支持认领页面，请用专用 Chrome（driver: direct）'); return (await load()).shim.adoptTargets(re); }
 export async function withTab(url, fn, { wait = 8000 } = {}) {
   if (mode === 'plugin') return bridge.withTab(url, fn, { wait });
   await load(); const t = await chrome.tabs.create({ url, active: false });

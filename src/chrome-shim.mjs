@@ -101,4 +101,14 @@ export const chrome = {
     async sendCommand({ tabId }, method, params = {}) { await connect(); return raw(method, params, await session(tabId)); },
   },
 };
+// 认领专用 Chrome 里已经开着的页面（别的进程填好的发帖页），返回本进程可用的 tabId
+export async function adoptTargets(re) {
+  await connect();
+  const { targetInfos } = await raw('Target.getTargets');
+  return targetInfos.filter(t => t.type === 'page' && re.test(t.url)).map(t => {
+    let id = byTarget.get(t.targetId);
+    if (id == null) { id = nextTab++; tabs.set(id, { targetId: t.targetId }); byTarget.set(t.targetId, id); }
+    return id;
+  });
+}
 export function closeConnection() { if (ws) { ws.onclose = null; ws.close(); ws = null; } }

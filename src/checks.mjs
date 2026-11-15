@@ -85,8 +85,14 @@ export async function ytSubmit(tabId, title, scheduleIso) {
   await sleep(8000);
   const text = await evaluate(tabId, `document.body.innerText`).catch(() => '');
   const link = (text.match(/https:\/\/youtu\.be\/[\w-]+/) || [''])[0];
-  const rows = await ytRows(title).catch(() => null);
-  if (rows && rows.length === 1 && /已安排|定时|公开|首播/.test(rows[0])) return { ok: true, state: scheduleIso ? 'scheduled' : 'published', detail: rows[0], url: link || undefined };
+  // Studio 列表刷新慢：点完常常还显示「待处理」（2026-11-15 麦田开源这期），每 30 秒查一次，最多 3 分钟
+  let rows = null;
+  for (let i = 0; i < 7; i++) {
+    if (i) await sleep(30000);
+    rows = await ytRows(title).catch(() => null);
+    if (rows && rows.length === 1 && /已安排|定时|公开|首播/.test(rows[0]) && !/待处理|草稿/.test(rows[0])) return { ok: true, state: scheduleIso ? 'scheduled' : 'published', detail: rows[0].replace(/ https:\S+/, ''), url: link || (rows[0].match(/https:\S+/) || [])[0] };
+    if (rows && rows.length > 1) break;   // 多了一条，别再等，交给人看
+  }
   return { ok: false, reason: `YouTube 点了「${want}」，但 Studio 里的状态没确认上（${rows ? rows.length + ' 条：' + rows.join(' / ') : '列表没读到'}），请人工看一眼，不要重复提交` };
 }
 
@@ -104,9 +110,28 @@ export const douyinTopics = (tabId) => evaluate(tabId, `[...new Set([...document
 const IG_USER = `(()=>{const i=[...document.querySelectorAll('a[href] img[alt]')].find(i=>/的头像|profile picture/i.test(i.alt)&&i.getBoundingClientRect().x<150);return i?i.closest('a').getAttribute('href').replace(/\\//g,''):null})()`;
 const igHead = (caption) => [...firstLine(caption)].slice(0, 30).join('');
 
-// Instagram：自己主页 Reels 列表里有没有这一期（逐条打开最近几条，配文第一行对得上就算）。定时中的 Reels 不在列表里，查不到
-export async function igExisting(caption) {
+// Instagram：定时内容页（/scheduled_content/，按周显示）里有没有这一期。从本周往后翻到定时所在那周
+// 定时中的 Reels 不在主页列表里（2026-11-15 麦田开源这期发现），查重必须先看这里
+export async function igScheduled(caption, scheduleIso) {
   const head = igHead(caption);
+  const weeks = scheduleIso ? Math.max(0, Math.ceil((Date.parse(scheduleIso) - Date.now()) / (7 * 86400e3))) + 1 : 2;
+  return withTab('https://www.instagram.com/scheduled_content/', async (id) => {
+    let n = -1;
+    for (let w = 0; w <= Math.min(weeks, 12); w++) {
+      if (w) { if (!await click(id, `[...document.querySelectorAll('main [role=button],main button')].find(b=>(b.getAttribute('aria-label')||b.innerText).trim()==='下周'||/next week/i.test(b.getAttribute('aria-label')||''))`)) break; }
+      for (let i = 0; i < 6; i++) { await sleep(2500); n = await evaluate(id, `(()=>{const m=document.querySelector('main');if(!m||!/周视图|Week/.test(m.innerText))return -1;return m.innerText.split(${JSON.stringify(head)}).length-1})()`).catch(() => -1); if (n >= 0) break; }
+      if (n < 0) throw new Error('Instagram 定时内容页没打开（没登录或页面改版）');
+      if (n > 0) return { state: 'scheduled', detail: n > 1 ? `定时内容里有 ${n} 条同标题，可能发重了` : '定时内容里已有这一期', count: n };
+    }
+    return null;
+  }, { wait: 6000 });
+}
+
+// Instagram：先看定时内容，再看自己主页 Reels 列表（逐条打开最近几条，配文第一行对得上就算）
+export async function igExisting(caption, scheduleIso) {
+  const head = igHead(caption);
+  const sch = await igScheduled(caption, scheduleIso).catch(() => null);
+  if (sch) return sch;
   return withTab('https://www.instagram.com/', async (id) => {
     let u = null;
     for (let i = 0; i < 10 && !u; i++) { u = await evaluate(id, IG_USER).catch(() => null); if (!u) await sleep(2000); }
