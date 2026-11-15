@@ -1,5 +1,5 @@
 // 发布前查重、填写后回读、自动提交。每个函数都失败即停，不硬来。
-import { evaluate, withTab, sleep } from './driver.mjs';
+import { evaluate, withTab, sleep, click } from './driver.mjs';
 import { SITE } from './site.mjs';
 
 const firstLine = (t) => t.split('\n')[0].trim();
@@ -99,3 +99,59 @@ export async function zszCourses(title) {
 // 抖音：真正识别成话题的个数
 // 编辑器类名会变，整页找 data-mention 节点并去重（2026-11-12 第 37 期旧选择器读成 0/5，实际 5/5）
 export const douyinTopics = (tabId) => evaluate(tabId, `[...new Set([...document.querySelectorAll('[data-mention]')].map(e=>e.innerText.trim()).filter(Boolean))]`);
+
+// Instagram：左侧栏头像 → 用户名
+const IG_USER = `(()=>{const i=[...document.querySelectorAll('a[href] img[alt]')].find(i=>/的头像|profile picture/i.test(i.alt)&&i.getBoundingClientRect().x<150);return i?i.closest('a').getAttribute('href').replace(/\\//g,''):null})()`;
+const igHead = (caption) => [...firstLine(caption)].slice(0, 30).join('');
+
+// Instagram：自己主页 Reels 列表里有没有这一期（逐条打开最近几条，配文第一行对得上就算）。定时中的 Reels 不在列表里，查不到
+export async function igExisting(caption) {
+  const head = igHead(caption);
+  return withTab('https://www.instagram.com/', async (id) => {
+    let u = null;
+    for (let i = 0; i < 10 && !u; i++) { u = await evaluate(id, IG_USER).catch(() => null); if (!u) await sleep(2000); }
+    if (!u) throw new Error('Instagram 没登录或页面没打开');
+    await evaluate(id, `(location.href='/${u}/reels/',1)`);
+    let hrefs = [];
+    for (let i = 0; i < 10 && !hrefs.length; i++) { await sleep(2500); hrefs = await evaluate(id, `[...new Set([...document.querySelectorAll('a[href*="/reel/"]')].map(a=>a.getAttribute('href').replace(/^.*?(\\/reel\\/[^/]+\\/).*$/,'$1')))].slice(0,4)`).catch(() => []); }
+    for (const h of hrefs) {
+      await evaluate(id, `(location.href='${h}',1)`);
+      for (let i = 0; i < 8; i++) {
+        await sleep(2000);
+        if (await evaluate(id, `document.body.innerText.includes(${JSON.stringify(head)})`).catch(() => false)) return { state: 'published', detail: 'Instagram 上已有这一期', url: `https://www.instagram.com${h}` };
+      }
+    }
+    return null;
+  }, { wait: 6000 });
+}
+
+// Instagram：核对配文和定时，点一次「分享 / 预设发布时间」，等上传完。视频是点了之后才开始传的，十几分钟的要传十来分钟。
+// 失败也不重试（IG 只会说「无法分享」，重试有发重的风险）
+export async function igSubmit(tabId, caption, scheduleIso) {
+  const DLG = `[...document.querySelectorAll('[role=dialog]')].map(d=>d.innerText).join('\\n')`;
+  const BOX = `document.querySelector('[role=dialog] [contenteditable=true]')`;
+  if (!await evaluate(tabId, `!!${BOX}`).catch(() => false)) return { ok: false, reason: 'Instagram 发帖窗口不见了（页面被关或刷新），要重新填' };
+  const norm = (t) => String(t || '').replace(/\s+/g, '');
+  if (norm(await evaluate(tabId, `${BOX}.innerText`)) !== norm(caption)) return { ok: false, reason: 'Instagram 配文和 publish.json 不一致' };
+  const want = scheduleIso ? '预设发布时间' : '分享';
+  if (scheduleIso) {
+    const d = new Date(Date.parse(scheduleIso) + 8 * 3600e3);
+    const exp = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()} ${d.getUTCHours()}:${d.getUTCMinutes()}`;
+    const got = await evaluate(tabId, `(()=>{const t=${DLG};const m=t.match(/(\\d{4})年(\\d{1,2})月(\\d{1,2})日/);const h=document.querySelector('[role=dialog] input[aria-label=Hours]'),mi=document.querySelector('[role=dialog] input[aria-label=Minutes]');return (m?[+m[1],+m[2],+m[3]].join('-'):'')+' '+(h?+h.getAttribute('aria-valuenow'):'')+':'+(mi?+mi.getAttribute('aria-valuenow'):'')})()`);
+    if (got !== exp) return { ok: false, reason: `Instagram 定时不对：页面是 ${got}，应该是 ${exp}` };
+  }
+  const BTN = `[...document.querySelectorAll('[role=dialog] div, [role=dialog] button')].filter(e=>e.childElementCount===0&&e.getClientRects().length&&e.innerText.trim()===${JSON.stringify(want)}).at(-1)`;
+  if (!await evaluate(tabId, `!!(${BTN})`)) return { ok: false, reason: `Instagram 找不到「${want}」按钮，没点` };
+  await click(tabId, BTN);
+  for (let i = 0; i < 240; i++) {   // 最多等 40 分钟
+    await sleep(10000);
+    const t = await evaluate(tabId, DLG).catch(() => '');
+    if (/无法分享|出错了|无法发布|couldn.t be shared|went wrong/i.test(t)) return { ok: false, reason: `Instagram 上传失败：${t.replace(/\n/g, ' ').slice(0, 60)}（没有重试，避免发重；请人工看一眼）` };
+    if (/已分享|已预设|已安排|预设好|has been shared|scheduled/i.test(t)) {
+      if (scheduleIso) return { ok: true, state: 'scheduled', detail: `已预设 ${scheduleIso.slice(0, 16).replace('T', ' ')}` };
+      const e = await igExisting(caption).catch(() => null);
+      return { ok: true, state: 'published', detail: '已分享', url: e && e.url };
+    }
+  }
+  return { ok: false, reason: 'Instagram 点了之后 40 分钟还没传完，请人工看一眼（不要再点第二次）' };
+}

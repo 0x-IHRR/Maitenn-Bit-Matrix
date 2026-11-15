@@ -17,6 +17,11 @@ async function load() {
 
 export async function ensure() { if (mode === 'plugin') return bridge.ensureBridge(); const l = await load(); await l.shim.launchChrome(); }
 export async function evaluate(tabId, expr, timeout) { if (mode === 'plugin') return bridge.evaluate(tabId, expr, timeout); return (await load()).cdp.evaluate(tabId, expr); }
+// 真实鼠标点击（直连模式用插件 cdp.js 的 click；开发桥模式退回元素 .click()）
+export async function click(tabId, expr) {
+  if (mode === 'plugin') return bridge.evaluate(tabId, `(()=>{const e=${expr};if(!e)return false;e.click();return true})()`);
+  return (await load()).cdp.click(tabId, expr);
+}
 export async function withTab(url, fn, { wait = 8000 } = {}) {
   if (mode === 'plugin') return bridge.withTab(url, fn, { wait });
   await load(); const t = await chrome.tabs.create({ url, active: false });

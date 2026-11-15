@@ -42,6 +42,17 @@ export const followerCollectors = {
     const s = await withTab(`https://x.com/${config.xHandle}`, async (t) => { for (let i = 0; i < 6; i++) { await sleep(2000); const v = await evaluate(t, `(document.querySelector('a[href$="/verified_followers"],a[href$="/followers"]')||{}).innerText||''`).catch(() => ''); if (v) return v; } return ''; }, { wait: 9000 });
     const total = num((s || '').replace(/\n/g, ' ')); return total != null && { total, history: [] };
   },
+  async instagram() {   // 读自己主页上的「×× 粉丝」（接口有频率限制，不调）
+    const n = await withTab('https://www.instagram.com/', async (t) => {
+      let u = null;
+      for (let i = 0; i < 8 && !u; i++) { await sleep(2000); u = await evaluate(t, `(()=>{const i=[...document.querySelectorAll('a[href] img[alt]')].find(i=>/的头像|profile picture/i.test(i.alt)&&i.getBoundingClientRect().x<150);return i?i.closest('a').getAttribute('href'):null})()`).catch(() => null); }
+      if (!u) return null;
+      await evaluate(t, `(location.href=${JSON.stringify(u)},1)`);
+      for (let i = 0; i < 8; i++) { await sleep(2500); const v = await evaluate(t, `(document.body.innerText.match(/([\\d,.]+\\s*[万KM]?)\\s*(?:粉丝|位粉丝|followers)/i)||[])[1]||''`).catch(() => ''); if (v) return v; }
+      return null;
+    }, { wait: 6000 });
+    const total = num(n); return total != null && { total, history: [] };
+  },
   async zsz() {   // 知识站的「粉丝」= 注册用户
     if (!SITE) return null;
     const r = await withTab(SITE.admin, (t) => evaluate(t, `${get(SITE.dashboardApi)}.then(x=>({total:x.funnel.totalRegistered,trend:x.registrationTrend||[]}))`));

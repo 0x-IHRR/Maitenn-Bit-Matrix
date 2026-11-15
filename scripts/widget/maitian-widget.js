@@ -106,8 +106,10 @@ function siteRows(st) {
   const r = st.addStack(); r.centerAlignContent();
   text(r, `注册 ${fmt(s.reg)}`, 12, C.ink); r.addSpacer(6); text(r, `会员 ${fmt(s.vip)}`, 12, C.ink); r.addSpacer(6); text(r, money(s.revenue), 12, C.gold);
 }
-function platformGrid(st, cols, size = 13) {
-  const ps = data.platforms || [];
+function platformGrid(st, cols, size = 13, rows = 2) {
+  // 最多 rows 行：平台多了只留粉丝最多的几个（顺序不变），总数里照样算全部
+  let ps = data.platforms || [];
+  if (ps.length > cols * rows) { const keep = new Set([...ps].sort((a, b) => b.total - a.total).slice(0, cols * rows).map(p => p.id)); ps = ps.filter(p => keep.has(p.id)); }
   for (let i = 0; i < ps.length; i += cols) {
     const row = st.addStack();
     ps.slice(i, i + cols).forEach((p, j) => {

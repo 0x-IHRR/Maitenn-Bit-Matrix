@@ -18,7 +18,7 @@ import { config, notify } from './feishu.mjs';
 import { collectFollowers } from './followers.mjs';
 import * as drv from './driver.mjs';
 import { SITE } from './site.mjs';
-import { xExisting, xSubmit, ytRows, ytSubmit, zszCourses, douyinTopics } from './checks.mjs';
+import { xExisting, xSubmit, ytRows, ytSubmit, zszCourses, douyinTopics, igExisting, igSubmit } from './checks.mjs';
 
 const args = process.argv.slice(2), cmd = args[0];
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
@@ -27,8 +27,8 @@ const strip = (s) => String(s || '').replace(/ *\d+%/, '');
 const mapState = (s) => s === '待你发布' ? 'filled' : s === '异常' || s === '上传超时' ? 'failed' : s === '未登录' ? 'not_logged_in' : s === '已停止' ? 'stopped' : s === '跳过' ? 'skipped' : 'running';
 const loadProject = (dir) => JSON.parse(fs.readFileSync(path.join(dir, 'publish.json'), 'utf8'));
 const projectOf = (ep, pj) => ({ dir: path.relative(config.rootPath, ep.dir), data: pj });
-const ALL = ['bilibili', 'xhs', 'douyin', 'channels', 'youtube', 'x', 'zsz'].filter(id => id !== 'zsz' || SITE);   // 没配自有站点就不管 zsz
-const LOGIN_PAGES = { bilibili: 'https://member.bilibili.com/platform/upload/video/frame', xhs: 'https://creator.xiaohongshu.com/publish/publish?source=official&target=video', douyin: 'https://creator.douyin.com/creator-micro/content/upload', channels: 'https://channels.weixin.qq.com/platform/post/create', youtube: 'https://studio.youtube.com/', x: 'https://x.com/home', zsz: SITE ? SITE.admin : '' };
+const ALL = ['bilibili', 'xhs', 'douyin', 'channels', 'youtube', 'x', 'instagram', 'zsz'].filter(id => id !== 'zsz' || SITE);   // 没配自有站点就不管 zsz
+const LOGIN_PAGES = { bilibili: 'https://member.bilibili.com/platform/upload/video/frame', xhs: 'https://creator.xiaohongshu.com/publish/publish?source=official&target=video', douyin: 'https://creator.douyin.com/creator-micro/content/upload', channels: 'https://channels.weixin.qq.com/platform/post/create', youtube: 'https://studio.youtube.com/', x: 'https://x.com/home', instagram: 'https://www.instagram.com/', zsz: SITE ? SITE.admin : '' };
 
 function table(eid) {
   return getTasks(eid).map(t => `${NAMES[t.platform] || t.platform}：${STATE_CN[t.state] || t.state}${t.detail ? `（${t.detail.slice(0, 80)}）` : ''}${t.url ? ` ${t.url}` : ''}`).join('\n');
@@ -68,7 +68,7 @@ async function after(ep, pj, id, res) {
       else { setTask(ep.id, id, 'failed', `后台同名课程有 ${cs.length} 节`); await notify(`❌ ${ep.name}\n知识站：同名课程 ${cs.length} 节，请检查`); }
       return;
     }
-    const r = id === 'x' ? await xSubmit(res.tabId, p.text, pj.schedule) : await ytSubmit(res.tabId, p.title, pj.schedule);
+    const r = id === 'x' ? await xSubmit(res.tabId, p.text, pj.schedule) : id === 'instagram' ? await igSubmit(res.tabId, p.caption, pj.schedule) : await ytSubmit(res.tabId, p.title, pj.schedule);
     log(ep.id, id, 'submit', JSON.stringify(r));
     if (r.ok) setTask(ep.id, id, r.state, r.detail || '', { url: r.url });
     else { setTask(ep.id, id, 'awaiting_user', r.reason); await notify(`⚠️ ${ep.name}\n${NAMES[id]} 没能自动提交：${r.reason}`); }
@@ -106,6 +106,7 @@ async function run() {
     if (rows.length === 1 && /已安排|定时|首播|公开/.test(rows[0]) && !/草稿|待处理/.test(rows[0])) setTask(ep.id, 'youtube', /已安排|定时|首播/.test(rows[0]) ? 'scheduled' : 'published', rows[0].replace(/ https:\S+/, ''), { url });
     else { setTask(ep.id, 'youtube', 'awaiting_user', `Studio 里已有 ${rows.length} 条同标题视频：${rows.join('；')}`); await notify(`⚠️ ${ep.name}\nYouTube Studio 里已有同标题视频（${rows.join('；')}），没有再上传，请先处理`); }
   } }
+  if (todo.includes('instagram')) { const e = await igExisting(pj.platforms.instagram.caption).catch(() => null); if (e) { setTask(ep.id, 'instagram', e.state, e.detail, { url: e.url }); todo = todo.filter(i => i !== 'instagram'); console.log('Instagram 上已经有这一期，跳过'); } }
   if (todo.includes('zsz')) { const cs = await zszCourses(pj.platforms.zsz.title).catch(() => []); if (cs.length) { setTask(ep.id, 'zsz', cs[0].vis === 'published' ? 'published' : 'scheduled', '后台已有同名课程', { url: SITE.courseUrl(cs[0]) }); todo = todo.filter(i => i !== 'zsz'); } }
   // 知识站没有定时：建课转码完就直接上线、发 VIP 群通知。定时发布的期推迟到定时前 ZSZ_LEAD 分钟由守护进程建课
   //（2026-11-12 第 37 期提前将近一天上线）
