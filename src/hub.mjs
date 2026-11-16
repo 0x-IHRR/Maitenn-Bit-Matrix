@@ -237,7 +237,7 @@ async function collectMetrics(ep) {
   for (const t of getTasks(ep.id)) {
     const fn = collectors[t.platform], p = pj.platforms[t.platform];
     if (!fn || !p || t.state !== 'published' || SKIP_METRICS.includes(t.platform)) continue;
-    let m = null; try { m = await fn({ url: t.url, p }); } catch (e) { log(ep.id, t.platform, 'metrics-error', e.message); }
+    let m = null; try { m = await fn({ url: t.url, p, detail: t.detail }); } catch (e) { log(ep.id, t.platform, 'metrics-error', e.message); }
     if (!m) { lines.push(`${NAMES[t.platform]}：没读到`); continue; }
     saveMetric(day, ep.id, t.platform, m); any = true;
     const prev = prevMetric(ep.id, t.platform, day), d = prev && m.views != null && prev.views != null ? m.views - prev.views : null;
