@@ -253,7 +253,7 @@ async function metricsReport(list) {
   const parts = [];
   for (const ep of list) { const r = await collectMetrics(ep).catch((e) => `【${ep.name}】采集出错：${e.message}`); if (r) parts.push(r); }
   // 粉丝：每天一次，和流量一起采
-  const fl = await collectFollowers().catch((e) => ({ 出错: e.message }));
+  const fl = await collectFollowers(null, SKIP_METRICS).catch((e) => ({ 出错: e.message }));   // --skip 的平台粉丝也不采
   const flLine = Object.entries(fl).map(([p, r]) => `${NAMES[p] || p} ${r && r.total != null ? r.total.toLocaleString('en-US') : r}`).join('｜');
   await board();
   if (parts.length) await notify(`📊 流量日报 ${today()}\n\n粉丝：${flLine}\n\n${parts.join('\n\n')}${config.board ? `\n\n看板：${config.board.url}` : ''}`);
