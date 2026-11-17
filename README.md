@@ -240,6 +240,16 @@ iPhone 桌面 / 锁屏常驻显示全平台粉丝、今日涨粉、最新一期�
 
 觉得有用就点个 ⭐ Star，这是我继续改下去的动力；遇到问题直接提 [Issue](https://github.com/CzzzzzzJ/mdldm-maitian/issues)。
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=czzzzzzj%2Fmdldm-maitian&type=date&releases=&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=czzzzzzj/mdldm-maitian&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=czzzzzzj/mdldm-maitian&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=czzzzzzj/mdldm-maitian&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ## License
 
 MIT
