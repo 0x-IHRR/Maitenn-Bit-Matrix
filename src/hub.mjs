@@ -20,6 +20,8 @@ import { collectFollowers } from './followers.mjs';
 import * as drv from './driver.mjs';
 import { SITE } from './site.mjs';
 import { learnOn, learnUrl, GROUP_URL } from './learn.mjs';
+import { validateProject } from './validate.mjs';
+import { STORE_URL, pluginInfo } from './plugin.mjs';
 import { xExisting, xSubmit, ytRows, ytSubmit, zszCourses, douyinTopics, igExisting, igSubmit } from './checks.mjs';
 // 出错时附一次交流群和教程入口；每天最多一次，不刷屏（config.learnLinks = false 关掉）
 function helpTip() {
@@ -119,14 +121,15 @@ async function submitOne() {
 async function run() {
   const dir = path.resolve(args[1] || '');
   if (!fs.existsSync(path.join(dir, 'publish.json'))) throw new Error(`${dir} 里没有 publish.json`);
-  try { execFileSync('node', [path.join(config.pluginDir, 'tools/validate.mjs'), dir], { stdio: 'pipe' }); }
-  catch (e) { throw new Error(`校验没通过：\n${(e.stdout || '').toString().slice(-800)}`); }
+  const v = await validateProject(dir);
+  if (!v.ok) throw new Error(`校验没通过：\n${v.text.slice(-800)}`);
   const pj = loadProject(dir), ep = { id: pj.id, episode: pj.episode, name: pj.name, dir, schedule: pj.schedule || null };
   upsertEpisode(ep); saveSnapshot(ep.id, pj, true);
   const only = opt('--only') ? opt('--only').split(',') : null, force = args.includes('--force');
   let todo = Object.keys(pj.platforms).filter(id => !pj.platforms[id].skip && (!only || only.includes(id)));
   // X 长文模式（长文 + 视频帖引用长文）：不走插件填写，定时前 25 分钟由守护进程调长文脚本
   if (todo.includes('x') && pj.platforms.x.mode === 'article+quote') {
+    if (!articleOn()) throw new Error('这期 X 是长文模式，只在作者自己的本地插件环境里可用；把 publish.json 里 X 的 mode 去掉，按普通视频帖发');
     todo = todo.filter(i => i !== 'x');
     if (!LOCKED.includes((getTask(ep.id, 'x') || {}).state)) setTask(ep.id, 'x', 'scheduled', '长文模式：定时前 25 分钟由麦田启动长文脚本（长文 + 视频帖引用长文）');
   }
@@ -270,6 +273,9 @@ async function metricsReport(list) {
 }
 
 async function doctor() {
+  const p = pluginInfo();
+  if (!p.dir) throw new Error(`还没装麦田发布助手：运行 node src/hub.mjs login，在专用 Chrome 里从应用商店添加（${STORE_URL}）`);
+  console.log(`麦田发布助手：${p.source === 'store' ? '商店版' : '本地'} ${p.version || ''}`);
   await drv.ensure();
   const r = await drv.checkLogin(ALL);
   const lines = ALL.map(id => `${NAMES[id]}：${r[id] && r[id].ok ? '✅ 已登录，上传页正常' : `❌ ${r[id] ? r[id].reason : '没有结果'}`}`);
@@ -295,7 +301,9 @@ async function ensureNas() {
   return ok();
 }
 
-// X 长文模式：到点前启动插件仓库里的 tools/x-article-quote.mjs（走日常 Chrome 里插件的开发桥）
+// X 长文模式（作者自用）：需要 config.plugin = 'local' 且本地插件目录里有 tools/x-article-quote.mjs
+const articleOn = () => config.plugin === 'local' && !!config.pluginDir && fs.existsSync(path.join(config.pluginDir, 'tools/x-article-quote.mjs'));
+// 到点前启动插件仓库里的 tools/x-article-quote.mjs（走日常 Chrome 里插件的开发桥）
 const extId = () => config.extensionId || [...crypto.createHash('sha256').update(path.resolve(config.pluginDir)).digest('hex').slice(0, 32)].map(c => String.fromCharCode(97 + parseInt(c, 16))).join('');
 function startArticleJob(ep, pj) {
   const x = pj.platforms.x, dir = ep.dir, logf = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'data', `x-article-${ep.id}.log`);
@@ -393,7 +401,7 @@ async function daemon() {
         const sched = ep.schedule ? Date.parse(ep.schedule) : 0, xt = getTask(ep.id, 'x');
         if (!sched || !xt || xt.state !== 'scheduled' || Date.now() < sched - 25 * MIN || Date.now() > sched + 20 * MIN || getMeta(`xart:${ep.id}`)) continue;
         let pj; try { pj = loadProject(ep.dir); } catch { continue; }
-        if (pj.platforms.x && pj.platforms.x.mode === 'article+quote') { setMeta(`xart:${ep.id}`, Date.now()); startArticleJob(ep, pj); await notify(`🕕 ${ep.name}\nX：启动长文脚本，${new Date(sched).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5)} 发长文，再发引用长文的视频帖`); }
+        if (pj.platforms.x && pj.platforms.x.mode === 'article+quote' && articleOn()) { setMeta(`xart:${ep.id}`, Date.now()); startArticleJob(ep, pj); await notify(`🕕 ${ep.name}\nX：启动长文脚本，${new Date(sched).toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5)} 发长文，再发引用长文的视频帖`); }
       }
       // 每天上午 10 点后采一次流量（最近 30 天的期数）
       if (new Date().getHours() >= 10 && getMeta('metricsDay') !== new Date().toLocaleDateString('zh-CN')) {
@@ -443,7 +451,12 @@ try {
     upsertEpisode(ep); saveSnapshot(ep.id, pj); for (const id of Object.keys(pj.platforms)) if (!getTask(ep.id, id)) setTask(ep.id, id, 'pending', '登记的往期');
     await sync(getEpisode(ep.id)); console.log(table(ep.id));
   }
-  else if (cmd === 'login') { await drv.openForLogin(ALL.map(i => LOGIN_PAGES[i])); console.log(`专用 Chrome 已打开 ${ALL.length} 个平台页面，登录完运行 hub doctor 检查`); }
+  else if (cmd === 'login') {
+    const p = pluginInfo(), needStore = p.source !== 'local' && !p.dir;
+    await drv.openForLogin([...(needStore ? [STORE_URL] : []), ...ALL.map(i => LOGIN_PAGES[i])]);
+    if (needStore) console.log(`第一步：在专用 Chrome 里的应用商店页面点「添加至 Chrome」，装上麦田发布助手（之后 Chrome 会自动更新它）`);
+    console.log(`专用 Chrome 已打开 ${ALL.length} 个平台页面，登录完运行 hub doctor 检查`);
+  }
   else if (cmd === 'followers') { await drv.ensure(); console.log(JSON.stringify(await collectFollowers(opt('--only') ? opt('--only').split(',') : null, opt('--skip') ? opt('--skip').split(',') : []), null, 1)); }
   else if (cmd === 'daemon') await daemon();
   else if (cmd === 'web') { const { startWeb } = await import('./web.mjs'); startWeb(); await new Promise(() => {}); }

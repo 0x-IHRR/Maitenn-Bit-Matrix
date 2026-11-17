@@ -3,8 +3,7 @@
 
   "feishuWebhook": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
 
-  "pluginDir": "/path/to/obsidian-x-publisher",
-  "extensionId": "插件以「加载已解压」安装后，chrome://extensions 里看到的扩展 ID",
+  "plugin": "store",
   "bridge": "http://127.0.0.1:8765",
   "driver": "direct",
   "learnLinks": true,
