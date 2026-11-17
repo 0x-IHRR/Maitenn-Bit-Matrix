@@ -222,6 +222,14 @@ iPhone 桌面 / 锁屏常驻显示全平台粉丝、今日涨粉、最新一期�
 - 🎬 B站 / 小红书 / 抖音 / 视频号：搜「麦当mdldm」
 - ▶️ [YouTube](https://www.youtube.com/channel/UCOz23ZQMefLAgDdnraGV2RQ) · 𝕏 [@czzzzzzJ_](https://x.com/czzzzzzJ_)
 
+### 交流群
+
+想一起聊麦田、多平台运营的，微信扫码进群（1 群已满，现在开的是 2 群）：
+
+<p align="center"><img src="docs/readme/qr-group.jpg" width="260" alt="微信群：麦当 mdldm 的麦田 2 群" /></p>
+
+> 微信群码 7 天有效（这张 11 月 24 日前可扫），我会定期换；扫不进去就提个 Issue 喊我一声。
+
 觉得有用就点个 ⭐ Star，这是我继续改下去的动力；遇到问题直接提 [Issue](https://github.com/CzzzzzzJ/mdldm-maitian/issues)。
 
 ## License
