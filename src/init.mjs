@@ -7,13 +7,20 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CFG = path.join(ROOT, 'config.json');
-// 自己排队读行：管道输入时 readline 会在提问前把行读完，rl.question 会丢行
-const rl = readline.createInterface({ input: process.stdin, terminal: process.stdin.isTTY });
+// TTY 下用 rl.question：readline 把终端切到 raw 模式并逐字回显输入；
+// 管道输入时 readline 会在提问前把行读完、rl.question 会丢行，所以非 TTY 时自己排队读行
+const tty = !!process.stdin.isTTY;
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: tty });
 const lines = [], waiters = []; let closed = false;
-rl.on('line', (l) => { const w = waiters.shift(); w ? w(l) : lines.push(l); });
-rl.on('close', () => { closed = true; while (waiters.length) waiters.shift()(''); });
+if (!tty) {
+  rl.on('line', (l) => { const w = waiters.shift(); w ? w(l) : lines.push(l); });
+  rl.on('close', () => { closed = true; while (waiters.length) waiters.shift()(''); });
+}
 const readLine = () => lines.length ? Promise.resolve(lines.shift()) : closed ? Promise.resolve('') : new Promise(r => waiters.push(r));
-const prompt = async (q) => { process.stdout.write(q); const l = await readLine(); if (!process.stdin.isTTY) process.stdout.write(l + '\n'); return l; };
+const prompt = async (q) => {
+  if (tty) return await rl.question(q);
+  process.stdout.write(q); const l = await readLine(); process.stdout.write(l + '\n'); return l;
+};
 const ask = async (q, def = '') => (await prompt(`${q}${def ? `（回车用：${def}）` : ''}\n> `)).trim() || def;
 // 非终端（管道或无输入）时默认一律「否」，免得误装开机自启
 const yes = async (q, def = true) => { def = def && !!process.stdin.isTTY; const a = (await prompt(`${q} ${def ? '[Y/n]' : '[y/N]'} `)).trim() || (def ? 'y' : 'n'); return /^(y|yes|是|好)$/i.test(a); };
