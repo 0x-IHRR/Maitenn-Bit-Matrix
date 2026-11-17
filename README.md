@@ -219,14 +219,15 @@ iPhone 桌面 / 锁屏常驻显示全平台粉丝、今日涨粉、最新一期�
 
 - `config.json`、`data/`（数据库、日志）、`chrome-profile/`（各平台登录态）都不进 git。
 - 麦田只读你自己账号的创作者后台数据，不做互动自动化、不碰别人的账号。
+- 安装向导结尾、出错通知（每天最多一次）和没接站点时的「转化」页里，有一个作者知识站和交流群的链接，带 utm 参数，只是让知识站知道访客从麦田来；麦田本身不上报任何数据。不想看到就在 `config.json` 里加 `"learnLinks": false`。
 
 ## 作者
 
-<p align="center"><a href="https://www.mdldm.club/ai-course-promotion?utm_source=github&utm_medium=readme&utm_campaign=maitian"><img src="docs/readme/author.png" alt="麦当 mdldm · 0 基础 AI Agent 教学博主 · mdldm.club 知识站" /></a></p>
+<p align="center"><a href="https://www.mdldm.club/ai-course-promotion?utm_source=github&utm_medium=readme&utm_campaign=maitian-readme"><img src="docs/readme/author.png" alt="麦当 mdldm · 0 基础 AI Agent 教学博主 · mdldm.club 知识站" /></a></p>
 
 我是麦当，做 0 基础 AI Agent / AI Coding 教程。麦田是照着我自己的发布流程一点点搭起来的，一边发视频一边在改。
 
-- 📚 **知识站 [mdldm.club](https://www.mdldm.club/ai-course-promotion?utm_source=github&utm_medium=readme&utm_campaign=maitian)**：0 基础 AI Agent 课程 + 每周直播。麦田怎么搭、数据怎么采、怎么接自己的项目，课里讲得更细。
+- 📚 **知识站 [mdldm.club](https://www.mdldm.club/ai-course-promotion?utm_source=github&utm_medium=readme&utm_campaign=maitian-readme)**：0 基础 AI Agent 课程 + 每周直播。麦田怎么搭、数据怎么采、怎么接自己的项目，课里讲得更细。
 - 🎬 B站 / 小红书 / 抖音 / 视频号：搜「麦当mdldm」
 - ▶️ [YouTube](https://www.youtube.com/channel/UCOz23ZQMefLAgDdnraGV2RQ) · 𝕏 [@czzzzzzJ_](https://x.com/czzzzzzJ_)
 

@@ -19,7 +19,16 @@ import { config, notify } from './feishu.mjs';
 import { collectFollowers } from './followers.mjs';
 import * as drv from './driver.mjs';
 import { SITE } from './site.mjs';
+import { learnOn, learnUrl, GROUP_URL } from './learn.mjs';
 import { xExisting, xSubmit, ytRows, ytSubmit, zszCourses, douyinTopics, igExisting, igSubmit } from './checks.mjs';
+// 出错时附一次交流群和教程入口；每天最多一次，不刷屏（config.learnLinks = false 关掉）
+function helpTip() {
+  if (!learnOn(config)) return '';
+  const day = new Date().toLocaleDateString('sv-SE');
+  if (getMeta('learnTipDay') === day) return '';
+  setMeta('learnTipDay', day);
+  return `\n\n💡 平台改版或卡住了：交流群和踩坑手册 ${GROUP_URL} ；完整教程 ${learnUrl('maitian-error')}`;
+}
 
 const args = process.argv.slice(2), cmd = args[0];
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
@@ -44,7 +53,7 @@ async function runBatch(ep, pj, batch) {
     last[s.id] = { state, tabId: s.tabId, logs: s.logs || [] };
     if (setTask(ep.id, s.id, state, detail, { tabId: s.tabId })) {
       log(ep.id, s.id, 'state', `${s.status} ${detail}`);
-      if (state === 'failed' || state === 'not_logged_in') notify(`❌ ${ep.name}\n${NAMES[s.id]}：${STATE_CN[state]}，${detail}`);
+      if (state === 'failed' || state === 'not_logged_in') notify(`❌ ${ep.name}\n${NAMES[s.id]}：${STATE_CN[state]}，${detail}${helpTip()}`);
     }
   };
   await drv.runBatch(projectOf(ep, pj), batch, onState, () => notify(`⚠️ ${ep.name}\n浏览器 2 分钟没响应，可能有弹窗卡住了，请看一眼`));
@@ -166,7 +175,7 @@ async function run() {
     if (!batch.length) continue;
     let res;
     try { res = await runBatch(ep, pj, batch); }
-    catch (e) { for (const id of batch) setTask(ep.id, id, 'failed', e.message); await notify(`❌ ${ep.name}\n${batch.map(i => NAMES[i]).join('、')} 这一批没跑起来：${e.message}`); continue; }
+    catch (e) { for (const id of batch) setTask(ep.id, id, 'failed', e.message); await notify(`❌ ${ep.name}\n${batch.map(i => NAMES[i]).join('、')} 这一批没跑起来：${e.message}${helpTip()}`); continue; }
     for (const id of batch) if (res[id]) pending.push(after(ep, pj, id, res[id]).then(async () => {
       const t = getTask(ep.id, id);
       if (['awaiting_user', 'scheduled', 'published'].includes(t.state)) await notify(`${t.state === 'awaiting_user' ? '👉' : '✅'} ${ep.name}\n${NAMES[id]}：${STATE_CN[t.state]}${t.detail ? `，${t.detail}` : ''}${t.url ? `\n${t.url}` : ''}`);
@@ -266,7 +275,7 @@ async function doctor() {
   const lines = ALL.map(id => `${NAMES[id]}：${r[id] && r[id].ok ? '✅ 已登录，上传页正常' : `❌ ${r[id] ? r[id].reason : '没有结果'}`}`);
   const bad = ALL.filter(id => !(r[id] && r[id].ok));
   console.log(lines.join('\n'));
-  if (args.includes('--notify') || bad.length) await notify(`🩺 发布中控体检（${drv.mode === 'plugin' ? '插件方式' : '专用 Chrome'}）\n${lines.join('\n')}`);
+  if (args.includes('--notify') || bad.length) await notify(`🩺 发布中控体检（${drv.mode === 'plugin' ? '插件方式' : '专用 Chrome'}）\n${lines.join('\n')}${bad.length ? helpTip() : ''}`);
   return bad;
 }
 
@@ -445,5 +454,5 @@ try {
   } else if (cmd === 'mark') { setTask(args[1], args[2], args[3], (args[4] && !args[4].startsWith('--') ? args[4] : '人工标记'), { url: opt('--url') || undefined }); log(args[1], args[2], 'mark', args[3]); console.log(table(args[1])); }
   else if (cmd === 'notify-test') await notify('发布中控已接通 ✅');
   else console.log('用法：hub login | doctor | run <工程目录> [--only a,b] [--force] | status [id] [--logs] | sync <id> | followers [--skip xhs] | metrics [id] [--skip xhs] | mark <id> <平台> <状态> | submit <id> <instagram|youtube|x> | daemon');
-} catch (e) { console.error('出错：' + e.message); if (!e.quiet) await notify(`❌ 发布中控出错：${e.message.slice(0, 300)}`); code = 1; }
+} catch (e) { console.error('出错：' + e.message); if (!e.quiet) await notify(`❌ 发布中控出错：${e.message.slice(0, 300)}${helpTip()}`); code = 1; }
 await drv.close(); db.close(); process.exit(code);
