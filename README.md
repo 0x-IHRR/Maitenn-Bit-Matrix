@@ -232,9 +232,9 @@ iPhone 桌面 / 锁屏常驻显示全平台粉丝、今日涨粉、最新一期�
 
 ### 交流群
 
-想一起聊麦田、多平台运营的，微信扫码进群（1 群已满，现在开的是 2 群）：
+想一起聊麦田、多平台运营的，微信扫码进群（1、2 群已满，现在开的是 3 群）：
 
-<p align="center"><img src="docs/readme/qr-group.jpg" width="260" alt="微信群：麦当 mdldm 的麦田 2 群" /></p>
+<p align="center"><img src="docs/readme/qr-group.jpg" width="260" alt="微信群：麦当 mdldm 的麦田 3 群" /></p>
 
 > 微信群码 7 天有效（这张 11 月 24 日前可扫），我会定期换；扫不进去就提个 Issue 喊我一声。
 
