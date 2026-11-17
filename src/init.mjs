@@ -4,6 +4,7 @@ import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os'
 import { execFileSync, spawnSync } from 'node:child_process';
 import readline from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { learnUrl, GROUP_URL } from './learn.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CFG = path.join(ROOT, 'config.json');
@@ -30,7 +31,7 @@ const home = (p) => p.replace(/^~(?=\/|$)/, os.homedir());
 console.log('\n麦田 · 安装向导\n');
 console.log('一、检查环境');
 const [maj, min] = process.versions.node.split('.').map(Number);
-if (maj > 22 || (maj === 22 && min >= 5)) ok(`Node.js ${process.versions.node}`); else { bad(`Node.js ${process.versions.node}，需要 22.5 以上（用到内置 node:sqlite）`); process.exit(1); }
+if (maj > 22 || (maj === 22 && min >= 5)) ok(`Node.js ${process.versions.node}`); else { bad(`Node.js ${process.versions.node}，需要 22.5 以上（用到内置 node:sqlite）`); tip(`卡住了看这里：${GROUP_URL}`); process.exit(1); }
 if (process.platform !== 'darwin') tip('目前只在 macOS 上实测过；其他系统需要自己改开机自启和 NAS 挂载部分');
 const chrome = ['/Applications/Google Chrome.app', path.join(os.homedir(), 'Applications/Google Chrome.app')].find(fs.existsSync);
 chrome ? ok('Google Chrome') : bad('没找到 Google Chrome，请先安装');
@@ -82,5 +83,9 @@ console.log(`
   · 只看数据（L1）：已经发过的期用 node src/hub.mjs adopt <工程目录> 登记
   · 分发（L2）：按 skills/maitian-publish 准备发布工程，node src/hub.mjs plan <工程目录>，到点前 node src/hub.mjs run <工程目录>
   · 想先看看效果：node src/demo.mjs（假数据，不碰你的配置）
+
+卡住了：
+  · 交流群和各平台踩坑：${GROUP_URL}
+  · 作者的完整安装和使用视频（知识站，免费注册）：${learnUrl('maitian-install')}
 `);
 rl.close();

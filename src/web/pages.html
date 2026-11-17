@@ -52,6 +52,12 @@ function vTraffic() {
 }
 
 function vConvert() {
+  if (!O.siteOn) return `<div class="h1">转化</div><p class="lead">还没接你自己的站点。</p>
+  <div class="panel" style="padding:18px 20px;line-height:1.8;font-size:14px;color:var(--t2)">
+    <p style="margin:0 0 10px">有课程站、会员站或者自己的产品，就能在这里看到：哪一期、哪个平台带来了注册和付费，每期一条「播放 → 注册 → 会员 → 收入」的漏斗。</p>
+    <p style="margin:0">接入方法：在 <code>config.json</code> 里配 <code>site</code>，站点提供两个只读接口，格式见 <code>src/site.mjs</code> 顶部注释；想按期看转化，站点还要记下访客第一次带来的 <code>utm_campaign</code>。</p>
+    ${O.learn ? `<p style="margin:12px 0 0">作者自己的站点怎么接、每期转化怎么看，会在会员直播课里完整讲一遍：<a href="${esc(O.learn)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">去知识站看看 ›</a></p>` : ''}
+  </div>`;
   const d = O.site.days, ch = O.site.channels;
   if (!d.length) return `<div class="h1">转化</div><p class="lead">还没同步${esc(PN.zsz)}数据。</p>${abtn({ type: 'board' }, '现在同步', 'pri')}`;
   const l7 = d.slice(-7), p7 = d.slice(-14, -7), tr = sum(ch, 'reg') || 1, mr = Math.max(...ch.map(c => c.revenue), 1);
