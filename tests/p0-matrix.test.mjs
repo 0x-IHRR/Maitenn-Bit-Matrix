@@ -217,6 +217,17 @@ test('对标号走公开源，限流立即暂停且不换源重试，其他主�
   } });
   assert.equal(recovered.source, 'api.vxtwitter.com');
   await assert.rejects(collectPublicAccount({ identity: 'demo' }, { hosts: ['evil.test'], fetch: async () => { throw new Error('不应请求未允许的主机'); } }), /允许列表/);
+  const caseCalls = [];
+  const recoveredCase = await collectPublicAccount({ identity: 'dianarod1508' }, { hosts: ['api.fxtwitter.com'], fetch: async url => {
+    caseCalls.push(url);
+    if (url.endsWith('/2/profile/dianarod1508')) return jsonResponse(404, { code: 404, message: 'User not found' });
+    if (url.includes('/statuses')) return jsonResponse(200, { code: 200, results: [{ type: 'status', id: statusId, text: '大小写', likes: 1, author: { screen_name: 'DianaRod1508' } }] });
+    if (url.endsWith('/2/profile/DianaRod1508')) return jsonResponse(200, { code: 200, user: { screen_name: 'DianaRod1508', followers: 1 } });
+    return jsonResponse(500, {});
+  } });
+  assert.equal(recoveredCase.followers, 1);
+  assert.equal(recoveredCase.discovered[0].title, '大小写');
+  assert.ok(caseCalls.some(url => url.endsWith('/2/profile/DianaRod1508')));
 });
 
 async function listen(app) {

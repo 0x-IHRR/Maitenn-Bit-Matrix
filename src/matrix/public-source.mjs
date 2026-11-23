@@ -92,6 +92,20 @@ export function mapPublicAccount(handle, profileData, timelineData, host) {
   return { identity: handle, followers, posts: [], discovered, source: host, warnings: [] };
 }
 
+async function readOptional(fetchImpl, url) {
+  try { return await getJson(fetchImpl, url); }
+  catch (error) {
+    if (error.code === 'risk' || error.code === 'login') throw error;
+    return { error };
+  }
+}
+function canonicalHandle(timeline, handle) {
+  for (const item of statusEntries(timeline || {})) {
+    const screen = String(item?.author?.screen_name || item?.user?.screen_name || '').replace(/^@/, '');
+    if (screen && screen.toLowerCase() === handle) return screen;
+  }
+  return '';
+}
 export async function collectPublicAccount(account, { fetch: fetchImpl = globalThis.fetch, hosts = PUBLIC_HOSTS, limit } = {}) {
   if (typeof fetchImpl !== 'function') throw new Error('缺少公开源请求方法');
   const handle = normalizeIdentity('x', account.identity);
@@ -100,9 +114,16 @@ export async function collectPublicAccount(account, { fetch: fetchImpl = globalT
   for (const host of hosts) {
     const base = `https://${host}`;
     try {
-      const profile = await getJson(fetchImpl, `${base}/2/profile/${encodeURIComponent(handle)}`);
-      const timeline = await getJson(fetchImpl, `${base}/2/profile/${encodeURIComponent(handle)}/statuses?count=${count}`);
-      const mapped = mapPublicAccount(handle, profile, timeline, host);
+      // Some public hosts 404 a lowercased profile even when the canonical handle and its timeline exist.
+      let profile = await readOptional(fetchImpl, `${base}/2/profile/${encodeURIComponent(handle)}`);
+      const timeline = await readOptional(fetchImpl, `${base}/2/profile/${encodeURIComponent(handle)}/statuses?count=${count}`);
+      if (timeline.error?.code === 'risk' || timeline.error?.code === 'login') throw timeline.error;
+      if (profile.error?.code === 'risk' || profile.error?.code === 'login') throw profile.error;
+      const canonical = canonicalHandle(timeline.error ? {} : timeline, handle);
+      if (profile.error && canonical && canonical !== handle) profile = await readOptional(fetchImpl, `${base}/2/profile/${encodeURIComponent(canonical)}`);
+      if (profile.error) throw profile.error;
+      const mapped = mapPublicAccount(handle, profile, timeline.error ? { results: [] } : timeline, host);
+      if (timeline.error) mapped.warnings.push({ reason: `时间线暂不可用：${timeline.error.message}` });
       return { ...mapped, discovered: mapped.discovered.slice(0, count) };
     } catch (error) {
       if (error.code === 'risk' || error.code === 'login' || error.code === 'mismatch') throw error;
