@@ -1,9 +1,9 @@
 // 麦田：本地网页。播种（发布）、长势（流量）、收成（转化）、粮仓（档案）
 import http from 'node:http'; import crypto from 'node:crypto'; import fs from 'node:fs'; import path from 'node:path'; import { spawn, execFileSync } from 'node:child_process'; import { fileURLToPath } from 'node:url';
 import { db, NAMES, STATE_CN, episodes, getEpisode, getTasks, recentLogs, getSnapshot, getMeta, setMeta } from './db.mjs';
-import { config, testFeishu } from './feishu.mjs';
+import { config, testFeishu, testTelegram } from './feishu.mjs';
 import { SITE, siteOn, refreshSite } from './site.mjs';
-import { applyFeishuPatch, applySitePatch, saveConfig, testSite } from './config-admin.mjs';
+import { applyFeishuPatch, applyTelegramPatch, applySitePatch, saveConfig, testSite } from './config-admin.mjs';
 import { learnOn, learnUrl } from './learn.mjs';
 import { review } from './review.mjs';
 import { accessEmail } from './access.mjs';
@@ -17,6 +17,7 @@ const short = (n) => n.split(/[｜|]/)[0].trim();
 const nickOf = (name, pj) => (pj && pj.nick) || (short(name).split(/[，,？?！!：:。]/)[0].trim() || short(name)).slice(0, 16);
 const latest = db.prepare('SELECT * FROM metrics WHERE episode_id=? AND platform=? ORDER BY day DESC LIMIT 1');
 const actions = [];   // 最近的操作（内存里）
+let extension = null;
 // 平台管理：登录状态、按平台打开登录页、停用/启用（停用写 config.disabled）
 const PLATFORMS = ['bilibili', 'douyin', 'xhs', 'channels', 'youtube', 'x', 'instagram'];   // 知识站不是平台账号，不在这里
 const CFG = process.env.MAITIAN_CONFIG || path.join(ROOT, 'config.json');
@@ -117,6 +118,7 @@ function integrations() {
     return { reg: rows.reduce((n, r) => n + (r.reg || 0), 0), revenue: rows.reduce((n, r) => n + (r.revenue || 0), 0) };
   })() : null;
   return {
+    telegram: { enabled: config.telegram?.enabled === true, chatId: config.telegram?.chatId || '', hasToken: !!config.telegram?.botToken, lastTest: metaJson('integrations.telegram.lastTest') },
     feishu: { webhook: config.feishuWebhook || '', login: W.login === 'feishu', lastTest: metaJson('integrations.feishu.lastTest') },
     site: {
       enabled: siteOn(), name: cs.name || '', base: cs.base || '',
@@ -132,6 +134,14 @@ const rollbackConfig = (backup) => { for (const k of Object.keys(config)) delete
 
 async function handle(req, res) {
   const u = new URL(req.url, 'http://x');
+  const host=req.headers.host || '';
+  if(!/^(?:localhost|127\.0\.0\.1):\d+$/.test(host)) return send(res,403,{error:'只接受本机访问'});
+  if((req.headers.origin && req.headers.origin!==`http://${host}`) || req.headers['sec-fetch-site']==='cross-site') return send(res,403,{error:'不允许跨站请求'});
+  if(u.pathname.startsWith('/api/')) {
+    let scope;try{scope=decodeURIComponent((req.headers.cookie||'').match(/(?:^|;\s*)bt_profile=([^;]*)/)?.[1]||'matrix');if(scope==='legacy')scope='matrix';}catch{return send(res,400,{error:'查看范围无效，请刷新页面'});}
+    const pinned=req.headers['x-maitian-profile'];
+    if((pinned && pinned!==scope) || (!['GET','HEAD'].includes(req.method)&&!pinned)) return send(res,409,{error:'页面查看范围已变化，请刷新后再操作'});
+  }
   // 访问控制：前面挂了 Cloudflare Access（邮箱验证码）就认它的登录凭证；否则用口令（第一次带 ?key= 进来，之后用 cookie）
   if (/^\/static\/icon-\d+\.png$/.test(u.pathname)) return send(res, 200, fs.readFileSync(path.join(DIR, 'web', path.basename(u.pathname))), 'image/png', { 'cache-control': 'max-age=86400' });   // 主屏幕图标不用登录
   if (u.pathname === '/api/widget/img') {   // 小组件图片：头像（config.web.avatar）或最新一期封面缩略图，同一个只读口令
@@ -163,6 +173,8 @@ async function handle(req, res) {
     if (!W.widgetToken) return send(res, 404, '<meta charset="utf-8">没配 config.web.widgetToken', 'text/html; charset=utf-8');
     return send(res, 200, widgetPage(widgetScript(req, 'maitian-loader.js')), 'text/html; charset=utf-8');
   }
+  if (extension && await extension.handle(req,res,u,send)) return;
+  if(extension && ['/api/overview','/api/episode','/api/action','/api/platform-toggle','/cover','/shot'].includes(u.pathname))return send(res,404,{error:'当前矩阵范围没有该数据或操作'});
   if (u.pathname === '/api/overview') {
     return send(res, 200, { name: config.name || '麦田', siteOn: !!SITE, learn: learnOn(config) ? learnUrl('maitian-board') : '', siteName: SITE ? SITE.name : '', siteLogo: !!(SITE && config.site.logo), board: config.board && config.board.url, driver: config.driver,
       episodes: episodes().sort((a, b) => (b.episode || 0) - (a.episode || 0)).map(e => episodeView(e)), actions: actions.slice(-8).reverse(),
@@ -186,6 +198,20 @@ async function handle(req, res) {
     return send(res, 200, fs.readFileSync(f), /\.png$/.test(f) ? 'image/png' : /\.svg$/.test(f) ? 'image/svg+xml' : 'image/jpeg', { 'cache-control': 'max-age=300' });
   }
   if (u.pathname === '/api/integrations' && req.method === 'GET') return send(res, 200, integrations());
+  if (u.pathname === '/api/integrations/telegram' && req.method === 'POST') {
+    const a = await readJson(req), backup = snapConfig();
+    try { applyTelegramPatch(config, a); }
+    catch (e) { return send(res, 400, { error: e.message }); }
+    try { saveConfig(config); }
+    catch { rollbackConfig(backup); return send(res, 500, { error: 'Telegram 配置保存失败' }); }
+    return send(res, 200, { telegram: integrations().telegram });
+  }
+  if (u.pathname === '/api/integrations/telegram/test' && req.method === 'POST') {
+    const a = await readJson(req);
+    const r = await testTelegram({ botToken: String(a.botToken || config.telegram?.botToken || '').trim(), chatId: String(a.chatId ?? config.telegram?.chatId ?? '').trim() });
+    setMeta('integrations.telegram.lastTest', JSON.stringify({ ...r, ts: new Date().toISOString() }));
+    return send(res, 200, r);
+  }
   if (u.pathname === '/api/integrations/feishu' && req.method === 'POST') {
     const a = await readJson(req), backup = snapConfig();
     try { applyFeishuPatch(config, { webhook: String(a.webhook ?? ''), login: a.login === true }); saveConfig(config); }
@@ -255,10 +281,11 @@ async function handle(req, res) {
   }
   send(res, 404, { error: 'not found' });
 }
-export function startWeb() {
+export function startWeb(options = {}) {
+  extension=options.extension || null;
   const srv = http.createServer((req, res) => { handle(req, res).catch((e) => { try { send(res, 500, { error: e.message }); } catch {} }); });
   initLogin(ROOT);
-  srv.listen(W.port, '0.0.0.0', () => console.log(`麦田网页：http://localhost:${W.port}/?key=${W.key}`));
+  srv.listen(Number(process.env.PORT || W.port), W.host || '127.0.0.1', () => console.log(`麦田网页：http://127.0.0.1:${process.env.PORT || W.port}/`));
   srv.on('error', (e) => console.error('麦田网页没起来：' + e.message));
   return srv;
 }

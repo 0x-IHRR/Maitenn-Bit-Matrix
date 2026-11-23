@@ -47,15 +47,54 @@ async function post(body, webhook = config.feishuWebhook) {
   return r.json().catch(() => ({}));
 }
 
-// 发飞书群消息；卡片发不出去就退回纯文字；失败只打印，不影响主流程
-export async function notify(text, { quiet = false } = {}) {
-  if (!quiet) console.log(`[飞书] ${text.replace(/\n/g, ' | ')}`);   // quiet：验证码之类的不写日志
+// 飞书卡片发不出去就退回纯文字；失败只打印，不影响其他通知通道
+async function notifyFeishu(text) {
   if (!config.feishuWebhook) return;
   try {
     let j = await post({ msg_type: 'interactive', card: toCard(text) });
     if (j.code && j.code !== 0) { console.error('飞书卡片被拒，改发文字：', JSON.stringify(j)); j = await post({ msg_type: 'text', content: { text } }); }
     if (j.code && j.code !== 0) console.error('飞书返回：', JSON.stringify(j));
   } catch (e) { console.error('飞书通知失败：', e.message); }
+}
+
+export function validateTelegram(t = {}) {
+  if (!/^\d+:[A-Za-z0-9_-]+$/.test(t.botToken || '')) throw new Error('请填写有效的 Bot Token');
+  if (!/^(?:-?\d+|@[A-Za-z0-9_]+)$/.test(t.chatId || '')) throw new Error('请填写有效的 Chat ID');
+}
+
+async function sendTelegram(text, t) {
+  validateTelegram(t);
+  try {
+    // 每段最多 2000 个字符，兼容 Telegram 的 4096 字符上限和 emoji。
+    const chars = Array.from(String(text));
+    for (let i = 0; i < chars.length; i += 2000) {
+      const r = await fetch(`https://api.telegram.org/bot${t.botToken}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: t.chatId, text: chars.slice(i, i + 2000).join('') }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const j = await r.json();
+      if (!r.ok || j.ok !== true) throw new Error(j.description || `Telegram 返回 HTTP ${r.status}`);
+    }
+  } catch (e) { throw new Error(String(e.message).split(t.botToken).join('[已隐藏]')); }
+}
+
+export async function testTelegram(t) {
+  try {
+    await sendTelegram('麦田 · 集成测试 ✅\n这是一条从系统页发出的测试消息。', t);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+export async function notify(text, { quiet = false } = {}) {
+  if (!quiet) console.log(`[通知] ${text.replace(/\n/g, ' | ')}`);
+  await Promise.all([
+    notifyFeishu(text),
+    // quiet 用于飞书登录验证码，不将验证码转发到 Telegram。
+    !quiet && config.telegram?.enabled
+      ? sendTelegram(text, config.telegram).catch(e => console.error('Telegram 通知失败：', e.message))
+      : null,
+  ]);
 }
 
 // 系统页「测试发送」：用给定的 webhook 发一条文字消息，返回成功/失败原因

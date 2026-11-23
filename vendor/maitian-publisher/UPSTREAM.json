@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/CzzzzzzJ/mdldm-maitian-publisher",
+  "revision": "171a30a3b8db7e4539e74f108f3d789a46172dab",
+  "license": "Apache-2.0",
+  "files": "lib/ copied without modification; only collectLinks is invoked by this workbench"
+}

@@ -17,11 +17,16 @@ const tabs = new Map();               // tabId -> {targetId, sessionId}
 const byTarget = new Map();           // targetId -> tabId
 let nextTab = 1000;
 
-const version = () => fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(2000) }).then(r => r.json());
+const version = () => fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(2000) }).then(r => r.json()).then(v => {
+  if (config.bitBrowser && config.bitBrowserWs && v.webSocketDebuggerUrl !== config.bitBrowserWs) throw Object.assign(new Error('比特环境调试连接已变化，请重新检查'), { code: 'identity' });
+  return v;
+});
 
 // 启动专用 Chrome（已经在跑就直接用）。foreground=true 时把窗口带到前台（登录用）
 export async function launchChrome({ foreground = false } = {}) {
+  if(config.matrixWorkbench && !config.bitBrowser) throw new Error('请在工作台中选择已绑定的比特 Profile');
   try { await version(); } catch {
+    if (config.bitBrowser) throw Object.assign(new Error('比特环境调试端口不可用，请先在比特中打开该环境'), { code: 'offline' });
     fs.mkdirSync(PROFILE, { recursive: true });
     const args = [`--user-data-dir=${PROFILE}`, `--remote-debugging-port=${PORT}`, '--no-first-run', '--no-default-browser-check',
       '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--window-size=1500,1000'];

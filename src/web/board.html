@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#f5f5f7">
-<title>麦田</title>
-<meta name="apple-mobile-web-app-title" content="麦田">
+<title>比特媒体矩阵</title>
+<meta name="apple-mobile-web-app-title" content="比特媒体矩阵">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="icon" href="/static/icon-180.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/static/mt.css">
+<script src="/static/profile-scope.js"></script>
+<script src="/static/bit-profiles.js" defer></script>
 </head>
 <body>
 <div class="bgfx"><i></i><i></i><i></i></div>
@@ -144,12 +146,12 @@ document.addEventListener('click', (e) => { const b = e.target.closest && e.targ
 function loginLight(h) {
   const ps = (h.platforms || []).filter(p => !p.disabled);
   const bad = ps.filter(p => p.state && p.state !== 'ok').length, none = !ps.length || ps.every(p => !p.state);
-  if (bad) return ['bad', `平台登录 ${bad} 家掉线`];
-  if (none) return ['warn', '平台登录 还没检'];
-  return ['ok', '平台登录 正常'];
+  if (bad) return ['bad', '账号身份 待处理'];
+  if (none || ps.some(p => p.state !== 'ok')) return ['warn', '账号身份 未核验'];
+  return ['ok', '账号身份 已核验'];
 }
 function render() {
-  const eps = O.episodes, days = O.site.days, h = O.health, now = Date.now();
+  const eps = O.episodes, days = O.site.days, h = O.health, scope = O.scope || {}, now = Date.now();
   // 停用的平台、未启用的知识站都不在大屏显示
   const off = new Set((h.platforms || []).filter(p => p.disabled).map(p => p.id));
   PL = PL_ALL.filter(p => !off.has(p) && (O.siteOn || p !== 'zsz')); FANP = FANP_ALL.filter(p => !off.has(p));
@@ -166,7 +168,7 @@ function render() {
   const prev = prevOf(cur); PREVOF = prevOf; HID = cur && cur.id;
   const today = new Date().toLocaleDateString('zh-CN');
   const [lc, lt] = loginLight(h);
-  const fansTotal = FANP.reduce((s, p) => s + (latest(p) || 0), 0);
+  const fanValues = FANP.map(p=>latest(p)).filter(v=>v!=null); const fansTotal = fanValues.length ? fanValues.reduce((a,b)=>a+b,0) : null;
   const g1 = FANP.map(p => gainN(p, 1)).filter(v => v != null), g7 = FANP.map(p => gainN(p, 7)).filter(v => v != null), g30 = FANP.map(p => gainN(p, 30)).filter(v => v != null);
   const cover7 = FANP.filter(p => gainN(p, 7) != null), noHist = FANP.filter(p => gainN(p, 1) == null);
   const marks = Object.fromEntries(eps.filter(e => e.schedule).map(e => [e.schedule.slice(0, 10), e.nick]));
@@ -183,26 +185,26 @@ function render() {
   };
   const f0 = O.feed[0];
   $('#screen').innerHTML = `
-  <div class="top"><div class="logo">麦<i>田</i></div><div class="tag">内容与粉丝监控</div>
+  <div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div>
     <div class="nav"><a class="on" href="/">大屏</a><a href="/p#/traffic">流量</a><a href="/p#/calendar">日历</a><a href="/p#/convert">转化</a><a href="/p#/archive">档案</a><a href="/p#/system">系统</a></div>
-    <div class="lights"><span class="light ok">守护进程 运行中</span><span class="light ${h.nas ? 'ok' : 'bad'}">NAS ${h.nas ? '已挂载' : '读不到'}</span><span class="light ${h.chrome ? 'ok' : 'bad'}">专用浏览器 ${h.chrome ? '在线' : '没开'}</span>
-      <span class="light ${lc}">${lt}</span></div>
+    <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span></div>
     <div class="clock" id="clock"></div></div>
 
   <div class="r1">
     <div class="panel hero" id="hero">${hero}</div>
     <div class="panel fans"><div class="ph"><h3>粉丝</h3><span class="note">${FANP.length} 个平台合计，不含知识站</span></div>
-      <div class="headline"><div class="val xl">${fmt(fansTotal)}</div><div class="g">${gp('今日', g1.length ? g1.reduce((a, b) => a + b, 0) : null)}${gp('近 7 天', g7.length ? g7.reduce((a, b) => a + b, 0) : null)}${gp('近 30 天', g30.length ? g30.reduce((a, b) => a + b, 0) : null)}</div></div>
+      <div class="headline"><div class="val xl">${fansTotal == null ? '未获取' : fmt(fansTotal)}</div><div class="g">${gp('今日', g1.length ? g1.reduce((a, b) => a + b, 0) : null)}${gp('近 7 天', g7.length ? g7.reduce((a, b) => a + b, 0) : null)}${gp('近 30 天', g30.length ? g30.reduce((a, b) => a + b, 0) : null)}</div></div>
       <div class="ph" style="margin:10px 0 2px"><h3 style="font-size:12.5px;color:var(--t2);font-weight:500">每日净增 · 近 30 天</h3><span class="note">${FANP.filter(p => gainN(p, 2) != null).map(p => `<i class="sw" style="width:8px;height:8px;margin:0 5px 0 10px;background:var(--p-${p})"></i>${PN[p]}`).join('')}</span></div>
       <div class="pb chart" id="c-fans"></div>
       <div class="cap">${noHist.length ? `${noHist.map(p => PN[p]).join('、')}后台不给历史，从今天开始记；涨跌只统计${cover7.map(p => PN[p]).join('、') || '有历史的平台'}` : '全部平台都有记录'}</div></div>
-    <div class="panel"><div class="ph"><h3>数据分析</h3><span class="note">按规则自动算，每天更新</span></div><div class="pb ins">${insights(cur, ref)}</div></div>
+    <div class="panel"><div class="ph"><h3>数据分析</h3><span class="note">基于本工作台已获取记录</span></div><div class="pb ins">${insights(cur, ref)}</div></div>
   </div>
 
   <div class="cards" style="--n:${PL.length}">${PL.map(card).join('')}</div>
 
   ${O.siteOn ? `  <a class="panel strip" href="/p#/convert"><h3>${esc(PN.zsz)} · 近 7 天</h3><span>新注册<b>${fmt(sum(l7, 'reg'))}</b></span><span>新会员<b>${fmt(sum(l7, 'vip'))}</b></span><span>订单<b>${fmt(sum(l7, 'orders'))}</b></span><span>收入<b>¥${fmt(sum(l7, 'revenue'))}</b></span>
     <span class="feedline">${f0 ? `最近动态：${pad(new Date(f0.ts).getHours())}:${pad(new Date(f0.ts).getMinutes())} ${f0.nick ? '「' + esc(f0.nick) + '」' : ''}${esc(f0.platform)} ${esc(f0.action)}${f0.result ? ' · ' + esc(f0.result) : ''}` : ''}</span><span class="go">转化详情 ›</span></a>` : ''}`;
+  dispatchEvent(new Event('maitian:render'));
   draw(); tick(); fixTabs(); if (!render.done) { render.done = true; countUp(); }
 }
 function draw() { if (!O) return; const ins = document.querySelector('.ins'); if (ins && innerWidth > 1100) { [...ins.children].forEach(c => c.style.display = ''); for (let k = ins.children.length - 1; k > 0 && ins.scrollHeight > ins.clientHeight + 2; k--) ins.children[k].style.display = 'none'; } const el = $('#c-fans'); if (!el) return; drawFans(el, daysBack(30), Object.fromEntries(O.episodes.filter(e => e.schedule).map(e => [e.schedule.slice(0, 10), e.nick]))); }
@@ -224,8 +226,8 @@ function tick() {
   }
 }
 async function load() {
-  try { const r = await fetch('/api/overview'); if (!r.ok) throw new Error(r.status); O = await r.json(); render(); }
-  catch (e) { if (!O) $('#screen').innerHTML = `<div class="empty">连不上麦田服务（${esc(e.message)}）</div>`; else console.error(e); }
+  try { const scope = document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix'; const r = await fetch('/api/overview'); if (!r.ok) throw new Error(r.status); const data = await r.json(); if (scope !== (document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix')) return; O = data; render(); }
+  catch (e) { if (!O) $('#screen').innerHTML = `<div class="empty">连不上本工作台服务（${esc(e.message)}）</div>`; else console.error(e); }
 }
 const tip = $('#tip');
 document.addEventListener('mousemove', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (!t) { tip.style.display = 'none'; return; } tip.textContent = t.dataset.tip; tip.style.display = 'block'; const w = tip.offsetWidth; tip.style.left = Math.min(innerWidth - w - 8, e.clientX + 14) + 'px'; tip.style.top = Math.max(8, e.clientY - 34) + 'px'; });

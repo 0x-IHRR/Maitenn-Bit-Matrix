@@ -1,6 +1,8 @@
 {
   "name": "麦田",
 
+  "telegram": { "enabled": false, "botToken": "", "chatId": "" },
+
   "feishuWebhook": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
 
   "plugin": "store",

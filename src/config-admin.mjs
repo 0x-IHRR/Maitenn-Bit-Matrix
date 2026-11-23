@@ -1,8 +1,19 @@
-// 集成配置管理：飞书群机器人、自定义知识站的合并 / 保存 / 测试。
-// 只动这两块字段，写回 config.json 前备份；保存后由调用方 refreshSite() 热更新。
+// 集成配置管理：Telegram、飞书群机器人、自定义知识站的合并 / 保存 / 测试。
+// 只动对应集成字段，写回 config.json 前备份；知识站由调用方 refreshSite() 热更新。
 import fs from 'node:fs';
-import { config, CFG } from './feishu.mjs';
+import { config, CFG, validateTelegram } from './feishu.mjs';
 import * as drv from './driver.mjs';
+
+// ---------- Telegram ----------
+export function applyTelegramPatch(config, p = {}) {
+  const t = {
+    enabled: p.enabled === true,
+    botToken: String(p.botToken || config.telegram?.botToken || '').trim(),
+    chatId: String(p.chatId ?? config.telegram?.chatId ?? '').trim(),
+  };
+  if (t.enabled) validateTelegram(t);
+  config.telegram = t;
+}
 
 // ---------- 飞书 ----------
 export function applyFeishuPatch(config, { webhook = '', login = false } = {}) {
@@ -44,13 +55,13 @@ export function saveConfig(config) {
 
 // ---------- 测试（只读，用调用方给的字段，不写库） ----------
 const dayStr = (t) => new Date(t + 8 * 3600e3).toISOString().slice(0, 10);
-export async function testSite(fields = {}) {
+export async function testSite(fields = {}, browser = drv) {
   const base = String(fields.base || '').replace(/\/$/, '');
   if (!base) return { ok: false, error: '先填站点地址' };
   const admin = base + (fields.adminPath || '/admin');
   const api = fields.dashboardApi || '/api/admin/dashboard';
   try {
-    const d = await drv.withTab(admin, (t) => drv.evaluate(t, `fetch(${JSON.stringify(api)},{credentials:'include'}).then(r=>r.ok?r.json():null).then(x=>x&&({reg:x.registrationTrend,rev:x.revenueTrend}))`), { wait: 8000 });
+    const d = await browser.withTab(admin, (t) => browser.evaluate(t, `fetch(${JSON.stringify(api)},{credentials:'include'}).then(r=>r.ok?r.json():null).then(x=>x&&({reg:x.registrationTrend,rev:x.revenueTrend}))`), { wait: 8000 });
     if (!d) return { ok: false, error: '知识站后台数据没读到（管理员登录过期？）' };
     const today = dayStr(Date.now()), cut = dayStr(Date.now() - 6 * 86400e3);
     const in7 = (d0) => { const k = String(d0 || '').slice(0, 10); return k >= cut && k <= today; };

@@ -23,16 +23,16 @@ function toast(t, ms = 2600) { const d = document.createElement('div'); d.classN
 function loginLight(h) {
   const ps = (h.platforms || []).filter(p => !p.disabled);
   const bad = ps.filter(p => p.state && p.state !== 'ok').length, none = !ps.length || ps.every(p => !p.state);
-  if (bad) return ['bad', `平台登录 ${bad} 家掉线`];
-  if (none) return ['warn', '平台登录 还没检'];
-  return ['ok', '平台登录 正常'];
+  if (bad) return ['bad', '账号身份 待处理'];
+  if (none || ps.some(p => p.state !== 'ok')) return ['warn', '账号身份 未核验'];
+  return ['ok', '账号身份 已核验'];
 }
-const platformSummary = (h) => loginLight(h)[1].replace(/^平台登录 /, '');
+const platformSummary = (h) => loginLight(h)[1].replace(/^账号身份 /, '');
 function topbar(O, on) {
-  const h = O.health, n = new Date(), [lc, lt] = loginLight(h);
+  const h = O.health, scope = O.scope || {}, n = new Date(), [lc, lt] = loginLight(h);
   const nav = [['/', '大屏', 'board'], ['/p#/traffic', '流量', 'traffic'], ['/p#/calendar', '日历', 'calendar'], ['/p#/convert', '转化', 'convert'], ['/p#/archive', '档案', 'archive'], ['/p#/system', '系统', 'system']];
-  return `<div class="top"><a class="logo" href="/">麦<i>田</i></a><div class="tag">内容与粉丝监控</div><div class="nav">${nav.map(([u, t, k]) => `<a class="${k === on ? 'on' : ''}" href="${u}">${t}</a>`).join('')}</div>
-    <div class="lights"><span class="light ok">守护进程 运行中</span><span class="light ${h.nas ? 'ok' : 'bad'}">NAS ${h.nas ? '已挂载' : '读不到'}</span><span class="light ${h.chrome ? 'ok' : 'bad'}">专用浏览器 ${h.chrome ? '在线' : '没开'}</span><span class="light ${lc}">${lt}</span></div>
+  return `<div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div><div class="nav">${nav.map(([u, t, k]) => `<a class="${k === on ? 'on' : ''}" href="${u}">${t}</a>`).join('')}</div>
+    <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span></div>
     <div class="clock"><small>${n.getMonth() + 1}/${n.getDate()} 周${'日一二三四五六'[n.getDay()]}</small>${pad(n.getHours())}:${pad(n.getMinutes())}</div></div>`;
 }
 function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const m = v / p; return (m <= 1 ? 1 : m <= 1.5 ? 1.5 : m <= 2 ? 2 : m <= 3 ? 3 : m <= 4 ? 4 : m <= 5 ? 5 : m <= 7.5 ? 7.5 : 10) * p; }

@@ -49,6 +49,9 @@ export async function fetchSite() {
   if (!SITE) throw new Error('没配置自有站点（config.site）');
   const d = await withTab(SITE.admin, (t) => evaluate(t, `fetch(${JSON.stringify(SITE.dashboardApi)},{credentials:'include'}).then(r=>r.ok?r.json():null).then(x=>x&&({reg:x.registrationTrend,rev:x.revenueTrend,ch:x.channelStats,camp:x.campaignStats||null}))`), { wait: 8000 });
   if (!d) throw new Error('知识站后台数据没读到（管理员登录过期？）');
+  return saveSiteData(d);
+}
+export function saveSiteData(d) {
   const days = {};
   for (const r of d.reg || []) days[r.date] = { reg: r.count || 0, vip: r.vipCount || 0, orders: 0, revenue: 0 };
   for (const r of d.rev || []) Object.assign(days[r.date] ||= { reg: 0, vip: 0 }, { orders: r.count || 0, revenue: r.revenue || 0 });

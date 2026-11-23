@@ -1,0 +1,6 @@
+{
+  "name": "maitian-publisher-engine",
+  "version": "0.5.1",
+  "private": true,
+  "type": "module"
+}

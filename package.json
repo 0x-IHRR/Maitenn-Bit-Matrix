@@ -1,10 +1,19 @@
 {
-  "name": "mdldm-maitian",
+  "name": "bt-multimedia",
   "version": "0.4.0",
-  "description": "麦田：自媒体多平台发布中控与数据监控（B站/抖音/小红书/视频号/YouTube/X）",
+  "description": "基于麦田通用模块的比特浏览器媒体矩阵工作台",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=22.5" },
-  "bin": { "maitian": "src/hub.mjs" },
-  "repository": { "type": "git", "url": "https://github.com/CzzzzzzJ/mdldm-maitian.git" }
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0x-IHRR/Maitenn-Bit-Matrix.git"
+  },
+  "private": true,
+  "scripts": {
+    "start": "node --use-env-proxy src/matrix/launch.mjs",
+    "test": "node --test"
+  }
 }

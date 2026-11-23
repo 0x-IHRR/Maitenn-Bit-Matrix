@@ -11,3 +11,8 @@ demo/
 src/*.local.mjs
 
 .superpowers/
+
+.DS_Store
+.env
+.env.*
+!.env.example
