@@ -188,7 +188,8 @@ function render() {
   <div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div>
     <div class="nav"><a class="on" href="/">大屏</a><a href="/p#/traffic">流量</a><a href="/p#/calendar">日历</a><a href="/p#/convert">转化</a><a href="/p#/archive">档案</a><a href="/p#/system">系统</a></div>
     <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span></div>
-    <div class="clock" id="clock"></div></div>
+    <div class="clock" id="clock"></div>
+    ${(h.issues || []).length ? `<div class="health-banner" role="alert">${(h.issues || []).map(issue => esc(issue.text)).join('<br>')}</div>` : ''}</div>
 
   <div class="r1">
     <div class="panel hero" id="hero">${hero}</div>

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { postKey } from './collector.mjs';
+import { isDenseSample } from './review.mjs';
 import { shanghaiDay } from './schedule.mjs';
 
 export const platforms = ['x', 'youtube', 'instagram'];
@@ -282,7 +283,11 @@ export class Store {
       }
       for(const update of result.postUpdates||[])this.markPost(id,update.id,update);
       if (!validMetric(result.followers) && !successes && !result.postUpdates?.length && !incoming.length) throw new Error('没有获取到有效指标，保留上次数据');
-      if(validMetric(result.followers)||successes)this.db.prepare('INSERT INTO snapshots(account_id,data,collected_at) VALUES (?,?,?)').run(id, JSON.stringify({followers:validMetric(result.followers) ? result.followers : null, source:result.source,posts}), time);
+      if(validMetric(result.followers)||successes) {
+        const born = new Map(this.db.prepare('SELECT id,data FROM posts WHERE account_id=?').all(id).map(row => [row.id, JSON.parse(row.data).createdAt]));
+        const snapshotPosts = posts.filter(post => post.id).map(post => ({ id: post.id, metrics: post.metrics, source: post.source || result.source, ...(isDenseSample(born.get(post.id), time) ? { dense: true } : {}) }));
+        this.db.prepare('INSERT INTO snapshots(account_id,data,collected_at) VALUES (?,?,?)').run(id, JSON.stringify({followers:validMetric(result.followers) ? result.followers : null, source:result.source, posts: snapshotPosts}), time);
+      }
       const warnings=(result.warnings || []).map(w => w?.id ? `${account.posts.find(p=>p.id===w.id)?.title || '作品'}：${w.reason}` : w?.reason).filter(Boolean).join('；');
       this.status(id, 'ready', warnings ? `部分作品未更新：${warnings}` : '');
     });
