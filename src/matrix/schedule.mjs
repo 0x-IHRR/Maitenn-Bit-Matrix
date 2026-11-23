@@ -56,7 +56,9 @@ export function dueSlot(hours, runs, now = new Date()) {
   const passed = [...hours].sort((a, b) => a - b).filter(h => h <= hour);
   if (!passed.length) return null;
   const slot = `${day}#${passed.at(-1)}`;
-  const today = (runs || []).filter(r => r.day === day);
+  // A run counts for this Shanghai day if it was stored that day or its slot is that day.
+  // The slot date wins near midnight, when the wall clock and the scheduled day can differ.
+  const today = (runs || []).filter(r => r.day === day || String(r.slot || '').startsWith(`${day}#`));
   if (today.length >= 2) return null;
   if (today.some(r => r.slot === slot)) return null;
   return slot;
