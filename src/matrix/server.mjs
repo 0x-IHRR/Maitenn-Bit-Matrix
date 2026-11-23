@@ -6,18 +6,35 @@ import { readProjects } from './importer.mjs';
 import { CollectionQueue } from './queue.mjs';
 import { BitBrowser } from './browser.mjs';
 import { collectAccount } from './collector.mjs';
+import { collectPublicAccount } from './public-source.mjs';
 import { nativeOverview } from './native-overview.mjs';
+import { isAbsolutePath } from './paths.mjs';
+import { CollectionScheduler, parseMonitorSettings, readMonitorSettings } from './schedule.mjs';
+import { withOwnedWindow } from './window.mjs';
+
+export function accountAlerts(accounts) {
+  return accounts.filter(account => account.enabled !== false && ['paused', 'mismatch', 'login', 'failed', 'offline'].includes(account.status))
+    .map(account => ({ accountId: account.id, identity: account.identity, group: account.group, status: account.status, reason: account.reason || '' }));
+}
 
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
-export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFactory, collector=collectAccount}={}) {
+export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFactory, collector=collectAccount, fetch, scheduler: schedulerOptions}={}) {
   bitFactory ||= () => new BitBrowser(store.settings().bitUrl);
-  const queue = new CollectionQueue(store,collector,bitFactory,2,async account=>{
-    const paths=new Set([account.projectPath,...account.posts.map(p=>p.projectPath)].filter(Boolean));
-    const records=[];
-    for(const path of paths) records.push(...await readProjects(path,account.platform,store.settings().maitianRoot));
-    const owned=new Set(account.posts.map(p=>p.sourceKey));
-    store.importPosts(account.id,records.filter(p=>owned.has(p.sourceKey)));
-  });
+  const readAccount = collector;
+  // Posts come from the profile timeline or a public/imported source.
+  // Maitian publish.json is no longer read during collection.
+  const wrapped = async (account, bit) => {
+    if ((account.group || 'owned') === 'benchmark') {
+      if (account.action === 'sync') throw new Error('对标账号不取发布链接');
+      return collectPublicAccount(account, { fetch });
+    }
+    const run = () => readAccount(account, bit);
+    if (account.action === 'sync') return run();
+    return withOwnedWindow(bit, account.profileId, run);
+  };
+  const queue = new CollectionQueue(store, wrapped, bitFactory, 2, async () => {});
+  const scheduler = new CollectionScheduler({ store, queue, ...schedulerOptions });
+  scheduler.start();
   let running = new Set(), connectionError='尚未检查比特接口';
   async function refreshRunning() {
     try {
@@ -47,7 +64,8 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
         }
         if(req.method==='GET' && req.url==='/api/state') {
           await refreshRunning();
-          return send(200,{settings:store.settings(),profiles:store.profiles().map(p=>({...p,running:running.has(p.id)})),accounts:store.accounts(),tasks:queue.tasks,connectionError});
+          const accounts=store.accounts();
+          return send(200,{settings:store.settings(),monitor:readMonitorSettings(store.settings()),profiles:store.profiles().map(p=>({...p,running:running.has(p.id)})),accounts,tasks:queue.tasks,connectionError,alerts:accountAlerts(accounts)});
         }
         if(req.method==='GET' && req.url==='/api/discover') {
           const profiles=await bitFactory().list();await refreshRunning();
@@ -57,11 +75,23 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
         if(!req.headers['content-type']?.startsWith('application/json')) return send(415,{error:'需要 application/json'});
         const b=await body(req);
         if(req.url==='/api/settings') {
-          const u=new URL(b.bitUrl);
-          if(u.protocol!=='http:' || !['127.0.0.1','localhost','[::1]'].includes(u.hostname) || u.username || u.password || u.pathname!=='/' || u.search || u.hash) throw new Error('比特地址须为本机 HTTP 接口');
-          if(b.maitianRoot && !b.maitianRoot.startsWith('/')) throw new Error('麦田目录须为绝对路径');
-          if(queue.active || queue.pending.length) throw new Error('采集执行中，请稍后修改连接配置');
-          store.setSettings({bitUrl:u.origin,maitianRoot:String(b.maitianRoot || '')});
+          const next={};
+          if(b.bitUrl!==undefined) {
+            const u=new URL(b.bitUrl);
+            if(u.protocol!=='http:' || !['127.0.0.1','localhost','[::1]'].includes(u.hostname) || u.username || u.password || u.pathname!=='/' || u.search || u.hash) throw new Error('比特地址须为本机 HTTP 接口');
+            next.bitUrl=u.origin;
+          }
+          if(b.maitianRoot!==undefined) {
+            if(b.maitianRoot && !isAbsolutePath(b.maitianRoot)) throw new Error('麦田目录须为绝对路径');
+            next.maitianRoot=String(b.maitianRoot || '');
+          }
+          if(['timelineLimit','collectsPerDay','collectHours','concurrency','intervalMinMinutes','intervalMaxMinutes','scheduleEnabled'].some(key=>b[key]!==undefined)) {
+            const parsed=parseMonitorSettings({...readMonitorSettings(store.settings()),...b});
+            Object.assign(next,{timelineLimit:String(parsed.timelineLimit),collectsPerDay:String(parsed.collectsPerDay),collectHours:parsed.collectHours.join(','),concurrency:String(parsed.concurrency),intervalMinMinutes:String(parsed.intervalMinMinutes),intervalMaxMinutes:String(parsed.intervalMaxMinutes),scheduleEnabled:parsed.scheduleEnabled?'1':'0'});
+          }
+          if(!Object.keys(next).length) throw new Error('没有可保存的设置');
+          if((next.bitUrl || next.maitianRoot!==undefined) && (queue.active || queue.pending.length)) throw new Error('采集执行中，请稍后修改连接配置');
+          store.setSettings(next);
         } else if(req.url==='/api/profiles') {
           const profile=(await bitFactory().list()).find(p=>p.id===b.id);
           if(!profile) throw new Error('比特当前可见列表中没有这个环境');
@@ -89,7 +119,27 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
             store.db.prepare('UPDATE accounts SET project_path=? WHERE id=?').run(b.projectPath,a.id);
           });return send(200,{imported:posts.length});
         } else if(req.url==='/api/update') return send(200,queue.enqueue(b));
-        else if(req.url==='/api/open') {
+        else if(req.url==='/api/accounts') {
+          if(b.action==='create') return send(200,{accountId:store.createAccount(b)});
+          if(!b.id) throw new Error('缺少账号');
+          if(queue.locked.has(b.id)) throw new Error('该账号正在采集，请稍后再改');
+          if(b.action==='update') { store.updateAccount(b.id,b); return send(200,{ok:true}); }
+          if(b.action==='delete') { store.deleteAccount(b.id); return send(200,{ok:true}); }
+          if(b.action==='unbind') return send(200,{unbound:store.unbind(b.id)});
+          throw new Error('未知账号操作');
+        } else if(req.url==='/api/external-import') {
+          const identity=identityOf('x', b.identity || b.handle || b.screen_name);
+          const existing=store.accounts().find(account=>account.platform==='x' && account.identity===identity);
+          if(existing && queue.locked.has(existing.id)) throw new Error('该账号正在采集，请稍后再导入');
+          return send(200, store.importExternal(b));
+        } else if(req.url==='/api/collect') {
+          const at=b.at ? new Date(b.at) : new Date();
+          if(Number.isNaN(at.getTime())) throw new Error('采集时间无效');
+          if(scheduler.running) return send(200,{accepted:false,skipped:'busy'});
+          const due=scheduler.dueAccounts(at).map(account=>account.id);
+          scheduler.tick(at).catch(()=>{});
+          return send(200,{accepted:true,due});
+        } else if(req.url==='/api/open') {
           if(!store.profiles().some(p=>p.id===b.profileId)) throw new Error('环境未纳管');
           await bitFactory().open(b.profileId);
         } else if(req.url==='/api/resume') store.resume(b.accountId,b.confirmed);
@@ -99,7 +149,8 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
       return send(404,{error:'接口不存在'});
     } catch(e) {send(400,{error:e.message});}
   });
-  return {server,store,queue};
+  server.on('close', () => scheduler.stop());
+  return {server,store,queue,scheduler};
 }
 if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const {server,store}=makeApp();

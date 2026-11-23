@@ -140,7 +140,9 @@ async function handle(req, res) {
   if(u.pathname.startsWith('/api/')) {
     let scope;try{scope=decodeURIComponent((req.headers.cookie||'').match(/(?:^|;\s*)bt_profile=([^;]*)/)?.[1]||'matrix');if(scope==='legacy')scope='matrix';}catch{return send(res,400,{error:'查看范围无效，请刷新页面'});}
     const pinned=req.headers['x-maitian-profile'];
-    if((pinned && pinned!==scope) || (!['GET','HEAD'].includes(req.method)&&!pinned)) return send(res,409,{error:'页面查看范围已变化，请刷新后再操作'});
+    // External import is a localhost machine API (Grok Bot), not a tab action, so it is not tied to the open page's profile scope.
+    const machineImport=u.pathname==='/api/bt/external-import';
+    if(!machineImport && ((pinned && pinned!==scope) || (!['GET','HEAD'].includes(req.method)&&!pinned))) return send(res,409,{error:'页面查看范围已变化，请刷新后再操作'});
   }
   // 访问控制：前面挂了 Cloudflare Access（邮箱验证码）就认它的登录凭证；否则用口令（第一次带 ?key= 进来，之后用 cookie）
   if (/^\/static\/icon-\d+\.png$/.test(u.pathname)) return send(res, 200, fs.readFileSync(path.join(DIR, 'web', path.basename(u.pathname))), 'image/png', { 'cache-control': 'max-age=86400' });   // 主屏幕图标不用登录

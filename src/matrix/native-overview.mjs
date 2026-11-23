@@ -12,7 +12,12 @@ export function nativeOverview(store, running, connectionError, profileId='') {
   const allAccounts=store.accounts();
   if(historyId && !allAccounts.some(a=>a.id===historyId&&a.platform==='x'))throw new Error('历史账号不存在');
   if(profileId && !historyId && !profiles.some(p=>p.id===profileId)) throw new Error('所选环境未纳管');
-  const accounts=allAccounts.filter(a=>a.platform==='x'&&(historyId?a.id===historyId:a.active&&(!profileId||a.profileId===profileId)));
+  const accounts=allAccounts.filter(a=>{
+    if(a.platform!=='x' || a.enabled===false) return false;
+    if(historyId) return a.id===historyId;
+    if(a.group==='benchmark') return !profileId;
+    return a.active && (!profileId || a.profileId===profileId);
+  });
   const days=new Map();
   for(const a of accounts) {
     const seen=new Set();

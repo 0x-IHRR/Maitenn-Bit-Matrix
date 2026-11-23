@@ -52,7 +52,7 @@ export function createMatrixExtension(options={}) {
   }
   return {
     store,queue,
-    close(){store.close();},
+    close(){app.scheduler?.stop();store.close();},
     async handle(req,res,u,send) {
       if(u.pathname.startsWith('/api/bt/')) {
         req.url=req.url.replace(/^\/api\/bt\//,'/api/');

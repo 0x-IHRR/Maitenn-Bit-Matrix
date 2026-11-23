@@ -69,7 +69,7 @@ test('更新仅重读已确认作品，新发现工程在显式确认前不自�
   await project('first');store.importPosts(id,await readProjects(dir,'x'));
   await project('unassigned');
   let received;
-  const app=makeApp({store,bitFactory:()=>({}),collector:async a=>{received=a.posts;return {identity:'owner',followers:3,posts:[]};}});
+  const app=makeApp({store,bitFactory:()=>({running:async()=>({p:1}),open:async()=>{throw new Error('不应打开已运行的窗口');},close:async()=>{throw new Error('不应关闭用户已打开的窗口');}}),collector:async a=>{received=a.posts;return {identity:'owner',followers:3,posts:[]};}});
   try {
     app.queue.enqueue({accountIds:[id]});
     for(let i=0;i<200&&app.queue.active;i++)await new Promise(r=>setTimeout(r,5));

@@ -211,7 +211,7 @@ const siteFields = () => { captureSiteDraft(); const s = itg().site, v = siteVal
 function vSystem() {
   const h = O.health, scope = O.scope || {}, today = new Date().toLocaleDateString('zh-CN'), cur = O.episodes[0], ps = (h.platforms || []).filter(p => p.id === 'x' && !p.disabled);
   const stOf = (p) => p.disabled ? ['off', '–', '已停用'] : p.state === 'ok' ? ['published', '✓', '已登录'] : p.state === 'out' ? ['not_logged_in', '✕', '未登录'] : ['idle', '?', '未检查'];
-  return `<div class="h1">系统</div><p class="lead">本工作台的比特环境、账号数据和独立集成配置。数据获取由手动操作触发。</p>
+  return `<div class="h1">系统</div><p class="lead">本工作台的比特环境、自有号与对标号。定时采集默认每天 1 次，最多 2 次；也可以手动更新。</p>
   <div class="grid g4">${tile('比特接口', scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查', esc(scope.connectionError || '本机 Local API'))}${tile('纳管 Profile', fmt(scope.profileCount), `${fmt(scope.runningCount)} 个运行中`)}${tile('账号身份', platformSummary(h), '写入数据前核验实际登录账号')}${tile('数据更新', '手动触发', `最后成功获取 ${when(scope.lastSuccess) || '尚未获取'}`)}</div>
   ${sec('平台', '登录、体检和常用操作；扫码要人在这台电脑前')}
   <div class="panel"><div class="btns" style="margin-bottom:4px">${abtn({ type: 'doctor' }, '全部检查', 'pri')}${abtn({ type: 'login' }, '打开全部登录页')}${cur ? abtn({ type: 'sync', id: cur.id }, `取「${esc(cur.nick)}」的链接`) : ''}${abtn({ type: 'metrics' }, '采流量')}${abtn({ type: 'followers' }, '采粉丝')}${abtn({ type: 'board' }, '同步知识站数据')}</div>
@@ -244,7 +244,7 @@ function vSystem() {
   <div class="sys-2col">
     <div class="panel sys-tasks">
       <div class="ph"><h3>更新方式</h3></div>
-      <div class="sys-scroll"><dl class="kv"><dt>平台数据</dt><dd>选择账号或 Profile 后手动更新，默认两个环境并行</dd><dt>浏览器环境</dt><dd>复用已运行 Profile；未运行的环境需手动打开</dd><dt>账号验证</dt><dd>人工登录与验证；出现明确风控时暂停对应账号</dd><dt>通知与转化</dt><dd>只使用本工作台单独保存的集成配置</dd></dl></div>
+      <div class="sys-scroll"><dl class="kv"><dt>平台数据</dt><dd>定时每天 1–2 次，或在上方手动更新。并发最多 2，账号之间随机间隔数分钟</dd><dt>浏览器环境</dt><dd>自有号按需打开比特窗口，只关闭本次打开的窗口</dd><dt>对标账号</dt><dd>不登录、不走比特，读公开接口或导入外部 JSON</dd><dt>账号验证</dt><dd>登录页、验证码或限流会暂停该号并在面板告警，不自动连试</dd></dl></div>
     </div>
     <div class="panel sys-feed">
       <div class="ph"><h3>最近动态</h3></div>
