@@ -60,12 +60,21 @@ const epc = (x) => `<span class="epc">${x.covers.length ? `<img src="/cover?id=$
 const samplesOf = (e) => PL.map(p => ({ name: PN[p], pts: O.samples.filter(s => s.episode_id === e.id && s.platform === p && s.views != null).map(s => [Date.parse(s.ts + ':00Z'), s.views]) })).filter(s => s.pts.length).sort((a, b) => b.pts[b.pts.length - 1][1] - a.pts[a.pts.length - 1][1]);
 let after = () => {};
 
+function weeklyBlock() {
+  const w = O.weekly; if (!w) return '';
+  return `${sec('上周周报', `${esc(w.from)} ～ ${esc(w.to)} · 每周一滚动`)}
+  <div class="panel"><p class="fine">${esc(w.note || '')}</p>
+  <div class="grid g3" style="margin-top:12px">${tile('矩阵粉丝变化', fmt(w.followerDelta), `自有 ${fmt(w.ownedFollowerDelta)} · 对标 ${fmt(w.benchmarkFollowerDelta)}`)}</div>
+  <div class="tw" style="margin-top:12px"><table><thead><tr><th>账号</th><th>分组</th><th class="n">粉丝变化</th></tr></thead><tbody>${(w.accounts || []).map(a => `<tr><td>@${esc(a.identity)}</td><td>${a.group === 'benchmark' ? '对标' : '自有'}</td><td class="n">${a.delta == null ? '–' : sgn(a.delta)}</td></tr>`).join('') || '<tr><td colspan="3">上周还没有可比的粉丝记录</td></tr>'}</tbody></table></div>
+  <div class="fine" style="margin-top:10px">播放最高：${(w.top || []).slice(0, 3).map(p => `@${esc(p.identity)} ${esc(p.title)} ${fmt(p.views)}`).join(' · ') || '还没有播放数'}</div></div>`;
+}
 function vTraffic() {
-  const eps = O.episodes.filter(e => e.tasks.some(t => t.m && t.m.views != null)); if (!eps.length) return `<div class="h1">流量</div><p class="lead">还没采到流量。</p>${abtn({ type: 'metrics' }, '现在采一次', 'pri')}`;
+  const eps = O.episodes.filter(e => e.tasks.some(t => t.m && t.m.views != null)); if (!eps.length) return `<div class="h1">流量</div><p class="lead">还没采到流量。</p>${weeklyBlock()}${abtn({ type: 'metrics' }, '现在采一次', 'pri')}`;
   const all = sum(eps, 'views'), it = sum(eps, 'inter'), byP = PL.map(p => ({ p, v: eps.reduce((s, e) => s + ((M(e, p) || {}).views || 0), 0) })).sort((a, b) => b.v - a.v);
   const e = eps.find(x => x.id === pick) || eps[0], rows = PL.map(p => ({ p, m: M(e, p), t: e.tasks.find(t => t.platform === p) })).filter(r => r.m), mx = Math.max(...rows.map(r => r.m.views || 0), 1);
   after = () => { const el = $('#c-line'); if (el) drawLines(el, samplesOf(e)); };
-  return `<div class="h1">流量</div><p class="lead">查看本工作台已登记作品的播放和互动，平台数据由手动更新获取。</p>
+  return `<div class="h1">流量</div><p class="lead">查看本工作台已登记作品的播放和互动。新帖 72 小时内的点，跟着每天最多 2 次的采集记下。</p>
+  ${weeklyBlock()}
   <div class="grid g4">${tile('累计播放', fmt(all), `${eps.length} 期合计`)}${tile('累计互动', fmt(it), `互动率 ${pct(it, all, 1)}`)}${tile('平均每期播放', fmt(all / eps.length))}${tile('播放最多的平台', PN[byP[0].p], `${fmt(byP[0].v)}，占 ${pct(byP[0].v, all)}`)}</div>
   ${sec('每期 × 平台', '格子里是播放数，细条是这一期里的占比')}
   <div class="panel"><div class="tw"><table><thead><tr><th>期</th>${PL.map(p => `<th class="n">${logo(p)}${PN[p]}</th>`).join('')}<th class="n">合计</th><th class="n">互动率</th></tr></thead><tbody>
@@ -141,7 +150,7 @@ async function vEpisode(id) {
   <div class="panel"><div class="tw"><table><thead><tr><th>平台</th><th>状态</th><th class="n">播放</th><th class="n">赞</th><th class="n">评论</th><th class="n">收藏</th><th class="n">转发</th><th class="n">互动率</th><th></th></tr></thead><tbody>
     ${PL.map(p => e.tasks.find(t => t.platform === p)).filter(Boolean).map(t => { const m = t.m || {}, u = safeUrl(t.url); return `<tr><td>${logo(t.platform)}${esc(PN[t.platform] || t.name)}</td><td>${chip(t)}</td><td class="n"><b>${fmt(m.views)}</b></td><td class="n">${fmt(m.likes)}</td><td class="n">${fmt(m.comments)}</td><td class="n">${fmt(m.favorites)}</td><td class="n">${fmt(m.shares)}</td><td class="n">${m.views ? pct(inter(m), m.views, 1) : '–'}</td><td class="n">${u ? `<a href="${u}" target="_blank" rel="noopener">打开 ↗</a>` : `<span style="color:var(--t3)">${esc(t.detail).slice(0, 18)}</span>`}</td></tr>`; }).join('')}</tbody></table></div></div>
   ${e.reviews && e.reviews.length ? `${sec('复盘', '同龄对比：拿上一期发布后同样天数的数据比')}<div class="panel"><div class="tw"><table><thead><tr><th>发布后</th><th class="n">全平台播放</th><th class="n">互动率</th><th>上一期同龄</th><th class="n">对比</th><th class="n">期间涨粉</th>${O.siteOn ? '<th class="n">注册（按期）</th>' : ''}</tr></thead><tbody>
-    ${e.reviews.map(r => `<tr><td><b>第 ${r.age} 天</b>${r.partial ? '<span style="color:var(--t3);font-size:12px;margin-left:6px">进行中</span>' : ''}</td><td class="n"><b>${fmt(r.views)}</b></td><td class="n">${pct(r.ints, r.views, 1)}</td><td>${r.prev ? `「${esc(r.prev.nick)}」${fmt(r.prev.views)}` : '<span style="color:var(--t3)">没有可比的上一期</span>'}</td><td class="n">${r.prev && r.prev.views ? (r.views >= r.prev.views ? `<b style="color:var(--good)">${(r.views / r.prev.views).toFixed(1)} 倍</b>` : `<b style="color:var(--crit)">${pct(r.views, r.prev.views, 0)}</b>`) : '–'}</td><td class="n">${r.fans ? (r.fans > 0 ? '+' : '') + fmt(r.fans) : '–'}</td>${O.siteOn ? `<td class="n">${r.conv ? fmt(r.conv.reg) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div></div>` : ''}
+    ${e.reviews.map(r => `<tr><td><b>第 ${r.age} 天</b>${r.partial ? '<span style="color:var(--t3);font-size:12px;margin-left:6px">进行中</span>' : ''}</td><td class="n"><b>${fmt(r.views)}</b></td><td class="n">${pct(r.ints, r.views, 1)}</td><td>${r.prev ? `「${esc(r.prev.nick)}」${fmt(r.prev.views)}` : '<span style="color:var(--t3)">没有可比的上一期</span>'}</td><td class="n">${r.prev && r.prev.views && r.views != null ? (r.views >= r.prev.views ? `<b style="color:var(--good)">${(r.views / r.prev.views).toFixed(1)} 倍</b>` : `<b style="color:var(--crit)">${pct(r.views, r.prev.views, 0)}</b>`) : '–'}</td><td class="n">${r.fans ? (r.fans > 0 ? '+' : '') + fmt(r.fans) : '–'}</td>${O.siteOn ? `<td class="n">${r.conv ? fmt(r.conv.reg) : '–'}</td>` : ''}</tr>`).join('')}</tbody></table></div></div>` : ''}
   ${sec('播放走势', '每次采样一个点')}<div class="panel"><div class="chartbox" id="c-line"></div></div>
   ${sec('当时发的文案', e.snapshotAt ? `存档于 ${when(e.snapshotAt)}` : '没有存档，显示的是工程目录里现在的内容')}
   <div class="panel">${PL.map(p => e.tasks.find(t => t.platform === p)).filter(Boolean).map(t => `<details><summary>${logo(t.platform)}<b>${esc(PN[t.platform] || t.name)}</b><span>${esc(t.copy.title || t.copy.body.slice(0, 50))}</span></summary>${t.copy.title ? `<div class="copy"><b>${esc(t.copy.title)}</b></div>` : ''}${t.copy.body ? `<div class="copy">${esc(t.copy.body)}</div>` : ''}${t.copy.tags.length ? `<div style="margin-top:8px;font-size:12.5px;color:var(--t3)">${t.copy.tags.map(x => '#' + esc(x)).join('  ')}</div>` : ''}${t.shot ? `<img class="shot" loading="lazy" src="/shot?id=${encodeURIComponent(e.id)}&p=${t.platform}" alt="提交前的页面截图">` : ''}</details>`).join('')}</div>
@@ -212,6 +221,7 @@ function vSystem() {
   const h = O.health, scope = O.scope || {}, today = new Date().toLocaleDateString('zh-CN'), cur = O.episodes[0], ps = (h.platforms || []).filter(p => p.id === 'x' && !p.disabled);
   const stOf = (p) => p.disabled ? ['off', '–', '已停用'] : p.state === 'ok' ? ['published', '✓', '已登录'] : p.state === 'out' ? ['not_logged_in', '✕', '未登录'] : ['idle', '?', '未检查'];
   return `<div class="h1">系统</div><p class="lead">本工作台的比特环境、自有号与对标号。定时采集默认每天 1 次，最多 2 次；也可以手动更新。</p>
+  ${(h.issues || []).length ? `<div class="health-banner" role="alert">${h.issues.map(issue => esc(issue.text)).join('<br>')}</div>` : ''}
   <div class="grid g4">${tile('比特接口', scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查', esc(scope.connectionError || '本机 Local API'))}${tile('纳管 Profile', fmt(scope.profileCount), `${fmt(scope.runningCount)} 个运行中`)}${tile('账号身份', platformSummary(h), '写入数据前核验实际登录账号')}${tile('数据更新', '手动触发', `最后成功获取 ${when(scope.lastSuccess) || '尚未获取'}`)}</div>
   ${sec('平台', '登录、体检和常用操作；扫码要人在这台电脑前')}
   <div class="panel"><div class="btns" style="margin-bottom:4px">${abtn({ type: 'doctor' }, '全部检查', 'pri')}${abtn({ type: 'login' }, '打开全部登录页')}${cur ? abtn({ type: 'sync', id: cur.id }, `取「${esc(cur.nick)}」的链接`) : ''}${abtn({ type: 'metrics' }, '采流量')}${abtn({ type: 'followers' }, '采粉丝')}${abtn({ type: 'board' }, '同步知识站数据')}</div>

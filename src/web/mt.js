@@ -31,9 +31,11 @@ const platformSummary = (h) => loginLight(h)[1].replace(/^账号身份 /, '');
 function topbar(O, on) {
   const h = O.health, scope = O.scope || {}, n = new Date(), [lc, lt] = loginLight(h);
   const nav = [['/', '大屏', 'board'], ['/p#/traffic', '流量', 'traffic'], ['/p#/calendar', '日历', 'calendar'], ['/p#/convert', '转化', 'convert'], ['/p#/archive', '档案', 'archive'], ['/p#/system', '系统', 'system']];
+  const issues = h.issues || [];
   return `<div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div><div class="nav">${nav.map(([u, t, k]) => `<a class="${k === on ? 'on' : ''}" href="${u}">${t}</a>`).join('')}</div>
     <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span></div>
-    <div class="clock"><small>${n.getMonth() + 1}/${n.getDate()} 周${'日一二三四五六'[n.getDay()]}</small>${pad(n.getHours())}:${pad(n.getMinutes())}</div></div>`;
+    <div class="clock"><small>${n.getMonth() + 1}/${n.getDate()} 周${'日一二三四五六'[n.getDay()]}</small>${pad(n.getHours())}:${pad(n.getMinutes())}</div>
+    ${issues.length ? `<div class="health-banner" role="alert">${issues.map(issue => esc(issue.text)).join('<br>')}</div>` : ''}</div>`;
 }
 function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const m = v / p; return (m <= 1 ? 1 : m <= 1.5 ? 1.5 : m <= 2 ? 2 : m <= 3 ? 3 : m <= 4 ? 4 : m <= 5 ? 5 : m <= 7.5 ? 7.5 : 10) * p; }
 // 按天的柱图；最后 7 根更亮
