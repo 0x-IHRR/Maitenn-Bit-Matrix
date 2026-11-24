@@ -11,6 +11,7 @@ import { nativeOverview } from './native-overview.mjs';
 import { isAbsolutePath } from './paths.mjs';
 import { CollectionScheduler, parseMonitorSettings, readMonitorSettings } from './schedule.mjs';
 import { withOwnedWindow } from './window.mjs';
+import { renderCsv, writeExport } from './export.mjs';
 
 export function accountAlerts(accounts) {
   return accounts.filter(account => account.enabled !== false && ['paused', 'mismatch', 'login', 'failed', 'offline'].includes(account.status))
@@ -62,6 +63,13 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
           await refreshRunning();
           const accounts=store.accounts();
           return send(200,{settings:store.settings(),monitor:readMonitorSettings(store.settings()),profiles:store.profiles().map(p=>({...p,running:running.has(p.id)})),accounts,tasks:queue.tasks,connectionError,alerts:accountAlerts(accounts)});
+        }
+        if(req.method==='GET' && url.pathname==='/api/export') {
+          const kind=url.searchParams.get('kind') || 'all';
+          const csv=`\uFEFF${renderCsv(store, kind)}`;
+          res.writeHead(200, {'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="matrix-${kind}.csv"`,'Cache-Control':'no-store'});
+          res.end(csv);
+          return;
         }
         if(req.method==='GET' && req.url==='/api/discover') {
           const profiles=await bitFactory().list();await refreshRunning();
@@ -123,6 +131,9 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
           if(b.action==='delete') { store.deleteAccount(b.id); return send(200,{ok:true}); }
           if(b.action==='unbind') return send(200,{unbound:store.unbind(b.id)});
           throw new Error('未知账号操作');
+        } else if(url.pathname==='/api/export') {
+          const saved=writeExport(store, b.path, b.kind || 'all');
+          return send(200, { ok: true, ...saved });
         } else if(req.url==='/api/external-import') {
           const identity=identityOf('x', b.identity || b.handle || b.screen_name);
           const existing=store.accounts().find(account=>account.platform==='x' && account.identity===identity);

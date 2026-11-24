@@ -133,14 +133,17 @@ export class Store {
       const group = a.group_kind || 'owned';
       const enabled = a.enabled == null ? true : Number(a.enabled) !== 0;
       const samples = this.db.prepare('SELECT data,collected_at FROM snapshots WHERE account_id=? ORDER BY id DESC').all(a.id);
-      const last = samples[0] && JSON.parse(samples[0].data);
-      const followerSamples = samples.map(s => ({...JSON.parse(s.data), at:s.collected_at})).filter(s => validMetric(s.followers));
+      const parsed = samples.map(s => ({ ...JSON.parse(s.data), at: s.collected_at }));
+      const last = parsed[0] || null;
+      const followerSamples = parsed.filter(s => validMetric(s.followers));
       return { id:a.id, platform:a.platform, identity:a.identity, status:a.status, reason:a.reason, projectPath:a.project_path, group, notes:a.notes || '', tags:parseTags(a.tags), enabled, displayName:a.display_name || '', active: group === 'benchmark' ? true : !!current, profileId:current?.profileId || (group === 'benchmark' ? null : history.at(-1)?.profileId), history,
         followers:followerSamples[0]?.followers ?? null, followersLastSuccess:followerSamples[0]?.at ?? null, growth:followerSamples.length > 1 ? followerSamples[0].followers - followerSamples[1].followers : null,
         lastSuccess:samples[0]?.collected_at ?? null, source:last?.source ?? null,
+        analytics: last?.analytics || null, analyticsIssue: last?.analyticsIssue || null,
+        analyticsHistory: [...parsed].reverse().filter(s => s.analytics || s.analyticsIssue).map(s => ({ at: s.at, analytics: s.analytics || null, issue: s.analyticsIssue || null })),
         posts:this.db.prepare('SELECT id,data FROM posts WHERE account_id=? ORDER BY rowid').all(a.id).map(p => ({...JSON.parse(p.data), id:p.id})),
         samples: followerSamples.map(s => ({followers:s.followers,at:s.at})),
-        postSamples:samples.flatMap(s=>(JSON.parse(s.data).posts||[]).map(p=>({...p,at:s.collected_at}))) };
+        postSamples:parsed.flatMap(s=>(s.posts||[]).map(p=>({...p,at:s.at}))).reverse() };
     });
   }
   status(id, status, reason = '') { this.db.prepare('UPDATE accounts SET status=?,reason=? WHERE id=?').run(status, reason, id); }
@@ -282,11 +285,30 @@ export class Store {
         successes++;
       }
       for(const update of result.postUpdates||[])this.markPost(id,update.id,update);
-      if (!validMetric(result.followers) && !successes && !result.postUpdates?.length && !incoming.length) throw new Error('没有获取到有效指标，保留上次数据');
-      if(validMetric(result.followers)||successes) {
+      for (const item of result.postAnalytics || []) {
+        const row = item.id
+          ? this.db.prepare('SELECT * FROM posts WHERE id=? AND account_id=?').get(item.id, id)
+          : this.db.prepare('SELECT * FROM posts WHERE account_id=? AND source_key=?').get(id, `x:status:${item.statusId}`);
+        if (!row || !item.analytics) continue;
+        const data = JSON.parse(row.data);
+        this.db.prepare('UPDATE posts SET data=? WHERE id=?').run(JSON.stringify({ ...data, analytics: item.analytics, lastSuccess: data.lastSuccess || time }), row.id);
+        successes++;
+      }
+      const hasAnalytics = !!result.analytics || !!result.analyticsIssue;
+      if (!validMetric(result.followers) && !successes && !result.postUpdates?.length && !incoming.length && !hasAnalytics) throw new Error('没有获取到有效指标，保留上次数据');
+      if(validMetric(result.followers)||successes||hasAnalytics) {
         const born = new Map(this.db.prepare('SELECT id,data FROM posts WHERE account_id=?').all(id).map(row => [row.id, JSON.parse(row.data).createdAt]));
-        const snapshotPosts = posts.filter(post => post.id).map(post => ({ id: post.id, metrics: post.metrics, source: post.source || result.source, ...(isDenseSample(born.get(post.id), time) ? { dense: true } : {}) }));
-        this.db.prepare('INSERT INTO snapshots(account_id,data,collected_at) VALUES (?,?,?)').run(id, JSON.stringify({followers:validMetric(result.followers) ? result.followers : null, source:result.source, posts: snapshotPosts}), time);
+        const snapshotPosts = posts.filter(post => post.id).map(post => ({ id: post.id, metrics: post.metrics, analytics: post.analytics, source: post.source || result.source, ...(isDenseSample(born.get(post.id), time) ? { dense: true } : {}) }));
+        for (const item of result.postAnalytics || []) {
+          const row = item.id
+            ? this.db.prepare('SELECT id FROM posts WHERE id=? AND account_id=?').get(item.id, id)
+            : this.db.prepare('SELECT id FROM posts WHERE account_id=? AND source_key=?').get(id, `x:status:${item.statusId}`);
+          if (!row) continue;
+          const slot = snapshotPosts.find(post => post.id === row.id);
+          if (slot) slot.analytics = item.analytics;
+          else snapshotPosts.push({ id: row.id, metrics: {}, analytics: item.analytics, source: 'X Analytics' });
+        }
+        this.db.prepare('INSERT INTO snapshots(account_id,data,collected_at) VALUES (?,?,?)').run(id, JSON.stringify({followers:validMetric(result.followers) ? result.followers : null, source:result.source, posts: snapshotPosts, analytics: result.analytics || null, analyticsIssue: result.analyticsIssue || null}), time);
       }
       const warnings=(result.warnings || []).map(w => w?.id ? `${account.posts.find(p=>p.id===w.id)?.title || '作品'}：${w.reason}` : w?.reason).filter(Boolean).join('；');
       this.status(id, 'ready', warnings ? `部分作品未更新：${warnings}` : '');

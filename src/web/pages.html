@@ -70,13 +70,24 @@ function weeklyBlock() {
   <div class="tw" style="margin-top:12px"><table><thead><tr><th>账号</th><th>分组</th><th class="n">粉丝变化</th></tr></thead><tbody>${(w.accounts || []).map(a => `<tr><td>@${esc(a.identity)}</td><td>${a.group === 'benchmark' ? '对标' : '自有'}</td><td class="n">${a.delta == null ? '–' : sgn(a.delta)}</td></tr>`).join('') || '<tr><td colspan="3">上周还没有可比的粉丝记录</td></tr>'}</tbody></table></div>
   <div class="fine" style="margin-top:10px">播放最高：${(w.top || []).slice(0, 3).map(p => `@${esc(p.identity)} ${esc(p.title)} ${fmt(p.views)}`).join(' · ') || '还没有播放数'}</div></div>`;
 }
+function analyticsSummary() {
+  const a = O.analytics || {};
+  const rows = a.accounts || [];
+  const trend = rows.flatMap(account => (account.followerTrend || []).map(point => `${esc(account.identity)} ${esc(point.day)} +${fmt(point.value)}`)).slice(-6);
+  return `${sec('X Analytics', '自有号后台。跟每天最多 2 次的采集读同一个窗口，不另开一轮')}
+  <div class="panel"><div class="grid g4">${tile('总曝光', a.impressions == null ? '还没有' : fmt(a.impressions))}${tile('主页访问', a.profileVisits == null ? '还没有' : fmt(a.profileVisits))}${tile('链接点击', a.linkClicks == null ? '还没有' : fmt(a.linkClicks))}</div>
+  ${rows.length ? `<div class="tw" style="margin-top:12px"><table><thead><tr><th>账号</th><th class="n">曝光</th><th class="n">互动率</th><th class="n">主页访问</th><th class="n">链接点击</th><th>新增粉丝</th></tr></thead><tbody>${rows.map(account => `<tr><td>@${esc(account.identity)}</td><td class="n">${fmt(account.impressions)}</td><td class="n">${account.engagementRate == null ? '–' : account.engagementRate + '%'}</td><td class="n">${fmt(account.profileVisits)}</td><td class="n">${fmt(account.linkClicks)}</td><td>${(account.followerTrend || []).slice(-3).map(point => `${esc(point.day)} +${fmt(point.value)}`).join(' · ') || '–'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="fine">自有号还没有 Analytics。下次采集会在已经打开的比特窗口里读，失败会留在顶部红条。</p>'}
+  ${trend.length ? `<p class="fine">近期新增粉丝：${trend.join(' · ')}</p>` : ''}
+  <div class="btns"><a class="btn" href="/api/bt/export?kind=all">导出全部 CSV</a><a class="btn" href="/api/bt/export?kind=accounts">账号 CSV</a><a class="btn" href="/api/bt/export?kind=posts">帖子 CSV</a><a class="btn" href="/api/bt/export?kind=analytics">Analytics 历史 CSV</a></div></div>`;
+}
 function vTraffic() {
-  const eps = O.episodes.filter(e => e.tasks.some(t => t.m && t.m.views != null)); if (!eps.length) return `<div class="h1">流量</div><p class="lead">还没采到流量。</p>${weeklyBlock()}${abtn({ type: 'metrics' }, '现在采一次', 'pri')}`;
+  const eps = O.episodes.filter(e => e.tasks.some(t => t.m && t.m.views != null)); if (!eps.length) return `<div class="h1">流量</div><p class="lead">还没采到流量。</p>${weeklyBlock()}${analyticsSummary()}${abtn({ type: 'metrics' }, '现在采一次', 'pri')}`;
   const all = sum(eps, 'views'), it = sum(eps, 'inter'), byP = PL.map(p => ({ p, v: eps.reduce((s, e) => s + ((M(e, p) || {}).views || 0), 0) })).sort((a, b) => b.v - a.v);
   const e = eps.find(x => x.id === pick) || eps[0], rows = PL.map(p => ({ p, m: M(e, p), t: e.tasks.find(t => t.platform === p) })).filter(r => r.m), mx = Math.max(...rows.map(r => r.m.views || 0), 1);
   after = () => { const el = $('#c-line'); if (el) drawLines(el, samplesOf(e)); };
   return `<div class="h1">流量</div><p class="lead">查看本工作台已登记作品的播放和互动。新帖 72 小时内的点，跟着每天最多 2 次的采集记下。</p>
   ${weeklyBlock()}
+  ${analyticsSummary()}
   <div class="grid g4">${tile('累计播放', fmt(all), `${eps.length} 期合计`)}${tile('累计互动', fmt(it), `互动率 ${pct(it, all, 1)}`)}${tile('平均每期播放', fmt(all / eps.length))}${tile('播放最多的平台', PN[byP[0].p], `${fmt(byP[0].v)}，占 ${pct(byP[0].v, all)}`)}</div>
   ${sec('每期 × 平台', '格子里是播放数，细条是这一期里的占比')}
   <div class="panel"><div class="tw"><table><thead><tr><th>期</th>${PL.map(p => `<th class="n">${logo(p)}${PN[p]}</th>`).join('')}<th class="n">合计</th><th class="n">互动率</th></tr></thead><tbody>
@@ -107,6 +118,10 @@ async function vEpisode(id) {
       <div style="display:flex;gap:34px;flex-wrap:wrap;margin:6px 0 16px"><div><div class="lab" style="font-size:12px;color:var(--t3)">全平台播放</div><div class="val">${e.views != null ? fmt(e.views) : '–'}</div></div><div><div style="font-size:12px;color:var(--t3)">互动</div><div class="val">${e.inter != null ? fmt(e.inter) : '–'}</div></div><div><div style="font-size:12px;color:var(--t3)">互动率</div><div class="val">${e.views > 1 ? pct(e.inter, e.views, 1) : '–'}</div></div><div><div style="font-size:12px;color:var(--t3)">已采集</div><div class="val">${e.tasks.filter(t => t.m).length}/${e.tasks.length}</div></div></div>
       <dl class="kv"><dt>记录时间</dt><dd>${e.schedule ? when(e.schedule) : (e.createdAt ? when(e.createdAt) : '未记录')}</dd>${e.durationSec ? `<dt>时长</dt><dd>${Math.floor(e.durationSec / 60)} 分 ${Math.round(e.durationSec % 60)} 秒</dd>` : ''}${e.campaign ? `<dt>链接标记</dt><dd>${esc(e.campaign)}</dd>` : ''}<dt>关联文件</dt><dd>${e.files.length ? e.files.map(esc).join('、') : '没有关联工程'}</dd></dl>
       <div class="btns" style="margin-top:16px">${abtn({ type: 'metrics', id: e.id }, '采这一期的流量', 'pri')}</div></div></div>
+  ${e.accountAnalytics || e.tasks.some(t => t.analytics) ? `${sec('Analytics 明细', '后台曝光和互动，不替代时间线上的公开播放')}<div class="panel"><div class="tw"><table><thead><tr><th>范围</th><th class="n">曝光</th><th class="n">互动率</th><th class="n">主页访问</th><th class="n">链接点击</th><th>新增粉丝</th></tr></thead><tbody>
+    ${e.accountAnalytics ? `<tr><td>账号</td><td class="n">${fmt(e.accountAnalytics.impressions)}</td><td class="n">${e.accountAnalytics.engagementRate == null ? '–' : e.accountAnalytics.engagementRate + '%'}</td><td class="n">${fmt(e.accountAnalytics.profileVisits)}</td><td class="n">${fmt(e.accountAnalytics.linkClicks)}</td><td>${(e.accountAnalytics.followerTrend || []).slice(-3).map(point => `${esc(point.day)} +${fmt(point.value)}`).join(' · ') || '–'}</td></tr>` : ''}
+    ${e.tasks.filter(t => t.analytics).map(t => `<tr><td>这条帖</td><td class="n">${fmt(t.analytics.impressions)}</td><td class="n">${t.analytics.engagementRate == null ? '–' : t.analytics.engagementRate + '%'}</td><td class="n">${fmt(t.analytics.profileVisits)}</td><td class="n">${fmt(t.analytics.linkClicks)}</td><td>${[t.analytics.likes, t.analytics.replies, t.analytics.reposts].some(v => v != null) ? `赞 ${fmt(t.analytics.likes)} · 回复 ${fmt(t.analytics.replies)} · 转帖 ${fmt(t.analytics.reposts)}` : '–'}</td></tr>`).join('')}
+  </tbody></table></div></div>` : ''}
   ${sec('各平台')}
   <div class="panel"><div class="tw"><table><thead><tr><th>平台</th><th>状态</th><th class="n">播放</th><th class="n">赞</th><th class="n">评论</th><th class="n">收藏</th><th class="n">转发</th><th class="n">互动率</th><th></th></tr></thead><tbody>
     ${PL.map(p => e.tasks.find(t => t.platform === p)).filter(Boolean).map(t => { const m = t.m || {}, u = safeUrl(t.url); return `<tr><td>${logo(t.platform)}${esc(PN[t.platform] || t.name)}</td><td>${chip(t)}</td><td class="n"><b>${fmt(m.views)}</b></td><td class="n">${fmt(m.likes)}</td><td class="n">${fmt(m.comments)}</td><td class="n">${fmt(m.favorites)}</td><td class="n">${fmt(m.shares)}</td><td class="n">${m.views ? pct(inter(m), m.views, 1) : '–'}</td><td class="n">${u ? `<a href="${u}" target="_blank" rel="noopener">打开 ↗</a>` : `<span style="color:var(--t3)">${esc(t.detail).slice(0, 18)}</span>`}</td></tr>`; }).join('')}</tbody></table></div></div>
@@ -172,7 +187,7 @@ function vSystem() {
   <div class="sys-2col">
     <div class="panel sys-tasks">
       <div class="ph"><h3>更新方式</h3></div>
-      <div class="sys-scroll"><dl class="kv"><dt>平台数据</dt><dd>定时每天 1–2 次，或在上方手动更新。并发最多 2，账号之间随机间隔数分钟</dd><dt>浏览器环境</dt><dd>自有号按需打开比特窗口，只关闭本次打开的窗口</dd><dt>对标账号</dt><dd>不登录、不走比特，读公开接口或导入外部 JSON</dd><dt>账号验证</dt><dd>登录页、验证码或限流会暂停该号并在面板告警，不自动连试</dd></dl></div>
+      <div class="sys-scroll"><dl class="kv"><dt>平台数据</dt><dd>定时每天 1–2 次，或在上方手动更新。Analytics 跟同一次采集读，不另计次数</dd><dt>浏览器环境</dt><dd>自有号按需打开比特窗口，只关闭本次打开的窗口</dd><dt>对标账号</dt><dd>不登录、不走比特，读公开接口或导入外部 JSON</dd><dt>账号验证</dt><dd>登录页、验证码或限流会暂停该号并在面板告警，不自动连试</dd><dt>导出</dt><dd><a href="/api/bt/export?kind=all">全部 CSV</a> · <a href="/api/bt/export?kind=analytics">Analytics 历史 CSV</a></dd></dl></div>
     </div>
     <div class="panel sys-feed">
       <div class="ph"><h3>最近动态</h3></div>

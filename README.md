@@ -24,6 +24,12 @@ curl -s http://127.0.0.1:8790/api/bt/external-import \
 
 这个导入接口只接受本机访问，不跟当前页面的查看范围绑定。其余写操作要在页面里做。不保存账号密码，不调用付费 X API，也不做点赞、关注、评论、转发、发帖或私信。
 
+自有号的 X Analytics（曝光、互动率、主页访问、链接点击、新增粉丝和单帖明细）在同一次采集里读取，不另外占每天 2 次的名额。流量页可以导出 CSV：
+
+```bash
+curl -s http://127.0.0.1:8790/api/bt/export?kind=all -o matrix.csv
+```
+
 云端环境没有比特浏览器，自动化测试使用模拟的 Local API 和公开源。`npm test` 可在没有比特的机器上跑。
 
 本项目独立初始化 `data/config.json`、`data/workbench.db`、`data/matrix.db`。不自动读取或复制其他麦田实例的配置、凭据和数据。没有矩阵数据时展示空状态；通知与转化集成需在本项目单独配置。采集计划实际写在 `data/matrix.db`，`config.example.json` 里的 `matrix` 是推荐值。

@@ -1,4 +1,5 @@
 import { fault } from './browser.mjs';
+import { ACCOUNT_ANALYTICS_URL, accountAnalyticsExpression, parseAccountAnalytics, parsePostAnalytics, postAnalyticsExpression, postAnalyticsUrl } from './analytics.mjs';
 
 export function numberOf(value) {
   if (value == null || value === '') return null;
@@ -149,6 +150,47 @@ function parseMetrics(platform, data) {
   const patterns = { views: 'views?|次观看|次浏览|次查看|观看次数|浏览次数|查看次数', likes: 'likes?|个喜欢|次喜欢|次点赞|喜欢|点赞', comments: 'repl(?:y|ies)|条回复|次回复|回复', favorites: 'bookmarks?|个书签|书签', shares: 'reposts?|次转帖|转帖|转发' };
   return Object.fromEntries(Object.entries(patterns).map(([k, p]) => [k, numberOf(data.match(new RegExp(`([\\d,.]+\\s*[KM万亿]?)\\s*(?:${p})(?:\\b|(?=[，,。、；;\\s]|$))`, 'i'))?.[1])]));
 }
+async function readXAnalytics(cdp, pages, owned, expected, posts) {
+  const warnings = [];
+  const postAnalytics = [];
+  const poll = async (page, script) => {
+    let raw;
+    for (let i = 0; i < 8; i++) {
+      raw = await cdp.evaluate(page, script);
+      if (raw?.risk || raw?.login || raw?.ready) break;
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
+    return raw || {};
+  };
+  const accountPage = await cdp.create(ACCOUNT_ANALYTICS_URL);
+  owned.push(accountPage); pages.push(accountPage);
+  const raw = await poll(accountPage, accountAnalyticsExpression());
+  if (raw.risk) throw fault('risk', raw.risk);
+  if (raw.login) throw fault('login', '请在比特环境中人工登录后重新检查');
+  if (raw.identity) checkIdentity('x', expected, raw);
+  const parsed = parseAccountAnalytics(raw.layout ? { text: '' } : raw);
+  if (parsed.halt) throw fault(parsed.halt, parsed.message);
+  if (parsed.issue) warnings.push({ reason: parsed.issue.text });
+  const ids = [];
+  for (const post of posts) {
+    const id = post.statusId || postKey('x', post.url) || String(post.id || '').match(/^\d{5,25}$/)?.[0];
+    if (id && !ids.includes(id)) ids.push(id);
+    if (ids.length >= 8) break;
+  }
+  if (!parsed.issue) for (const id of ids) {
+    const page = await cdp.create(postAnalyticsUrl(expected, id));
+    owned.push(page); pages.push(page);
+    const postRaw = await poll(page, postAnalyticsExpression());
+    if (postRaw.risk) throw fault('risk', postRaw.risk);
+    if (postRaw.login) throw fault('login', '请在比特环境中人工登录后重新检查');
+    if (postRaw.identity) checkIdentity('x', expected, postRaw);
+    const postParsed = parsePostAnalytics(postRaw.layout ? { text: '' } : postRaw);
+    if (postParsed.halt) throw fault(postParsed.halt, postParsed.message);
+    if (postParsed.issue) warnings.push({ reason: `帖子 ${id}：${postParsed.issue.text}` });
+    else postAnalytics.push({ id: posts.find(item => postKey('x', item.url) === id || item.id === id)?.id || null, statusId: id, analytics: postParsed.analytics, source: 'X Analytics' });
+  }
+  return { analytics: parsed.analytics, analyticsIssue: parsed.issue, postAnalytics, warnings };
+}
 async function instagramMedia(cdp, page, key) {
   const result = await cdp.evaluate(page, `(async()=>{const A='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';let pk=0n;for(const c of ${JSON.stringify(key)})pk=pk*64n+BigInt(A.indexOf(c));const r=await fetch('/api/v1/media/'+pk+'/info/',{credentials:'include',headers:{'X-IG-App-ID':'936619743392459'}});if(r.status===429)return {risk:'平台明确返回 HTTP 429 限流'};if(r.status===401)return {login:true};if(!r.ok)return {error:'作品接口 HTTP '+r.status};const d=await r.json();if(d.challenge||d.challenge_required||d.message==='challenge_required')return {risk:'平台要求人工验证'};const it=d.items?.[0];return it?{metrics:{views:it.play_count??it.ig_play_count??null,likes:it.like_count??null,comments:it.comment_count??null,shares:it.reshare_count??null}}:{error:'未取得已登记作品指标'}})()`);
   if (result.risk) throw fault('risk', result.risk);
@@ -262,9 +304,18 @@ export async function collectAccount(account, bit) {
       }
     }
     for (const page of new Set(used)) await verify(await cdp.evaluate(page, expression(platform)));
-    if (followers == null && !collectedPosts.length && !discovered.length) throw fault('error', '页面未提供可读取指标；保留上次数据');
+    let analytics = null, analyticsIssue = null, postAnalytics = [];
+    // Same BitBrowser window and the same daily collection. Analytics only opens temporary tabs.
+    if (platform === 'x' && account.readAnalytics && (account.group || 'owned') !== 'benchmark') {
+      const extra = await readXAnalytics(cdp, pages, owned, expected, [...discovered, ...posts]);
+      analytics = extra.analytics;
+      analyticsIssue = extra.analyticsIssue;
+      postAnalytics = extra.postAnalytics;
+      warnings.push(...extra.warnings);
+    }
+    if (followers == null && !collectedPosts.length && !discovered.length && !analytics) throw fault('error', '页面未提供可读取指标；保留上次数据');
     completed = true;
-    return { identity: expected, followers, posts: collectedPosts, discovered, source: follower.source, warnings };
+    return { identity: expected, followers, posts: collectedPosts, discovered, source: follower.source, warnings, analytics, analyticsIssue, postAnalytics };
   } finally {
     // Never close the Profile or pre-existing tabs; failed/login/verification pages remain for manual inspection.
     if (completed) for (const page of owned) await cdp.closePage(page).catch(() => {});
