@@ -37,5 +37,9 @@ test('完整麦田原生页面与比特范围共用服务，档案、封面和�
     const blocked=await fetch(base+'/api/action',{method:'POST',headers:{cookie:'bt_profile='+historical,'x-maitian-profile':historical,'content-type':'application/json'},body:JSON.stringify({type:'metrics',id})});
     assert.equal(blocked.status,403);
     const statsAfter=message();child.send('stats');assert.deepEqual(await statsAfter,{collections:0,opens:0});
+    const imported=await fetch(base+'/api/bt/external-import',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({identity:'importcheck',followers:3,source:'grok-bot',posts:[{id:'4234567890123456789',text:'导入',metrics:{views:1,likes:0,replies:0,reposts:0,bookmarks:0}}]})});
+    assert.equal(imported.status,200);
+    assert.equal((await imported.json()).created,true);
+    assert.equal((await fetch(base+'/api/bt/external-import',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json'},body:'{}'})).status,403);
   } finally {const exited=new Promise(r=>child.once('exit',r));child.kill();await exited;}
 });

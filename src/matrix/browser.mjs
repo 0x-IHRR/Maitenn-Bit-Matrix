@@ -46,6 +46,11 @@ export class BitBrowser {
     await this.request('/browser/open', { id });
     return { id, opened: true };
   }
+  async close(id) {
+    if (!id || typeof id !== 'string') throw fault('error', '缺少环境 ID');
+    await this.request('/browser/close', { id });
+    return { id, closed: true };
+  }
   async endpoint(id) {
     const running = await this.running();
     if (!running?.[id]) throw fault('offline', '环境未运行，请先点击打开环境');

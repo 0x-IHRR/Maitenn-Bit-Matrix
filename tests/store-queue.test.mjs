@@ -61,7 +61,7 @@ test('10个以上环境、重开SQLite后恢复绑定和历史',async()=>{
   } finally {await rm(dir,{recursive:true,force:true});}
 });
 test('最多2个Profile并行，同账号互斥，单账号失败不阻塞其余任务',async()=>{
-  const {store,ids}=setup(4);let active=0,max=0;const calls=[];
+  const {store,ids}=setup(4);store.setSettings({concurrency:'2'});let active=0,max=0;const calls=[];
   const q=new CollectionQueue(store,async a=>{
     calls.push(a.id);max=Math.max(max,++active);await new Promise(r=>setTimeout(r,15));active--;
     if(a.id===ids[0])throw new Error('普通超时');return {identity:a.identity,followers:10,posts:[]};

@@ -75,6 +75,66 @@ export function snapshot(platform, key) {
   return { identity, followers, metrics, risk, login, url: location.href };
 }
 const expression = (platform, key) => `(${snapshot.toString()})(${JSON.stringify(platform)},${JSON.stringify(key || null)})`;
+
+// Read-only. Scrolls a temporary profile tab to load posts. Does not click, like, follow, or post.
+export function timelineExpression(platform, limit) {
+  const cap = Math.max(1, Math.min(50, Number(limit) || 20));
+  return `(async()=>{
+    const snapshot=${snapshot.toString()};
+    const cap=${cap};
+    const harvest=()=>{
+      const posts=[]; const seen=new Set();
+      for (const article of document.querySelectorAll('article')) {
+        const permalink=article.querySelector('a[href] time')?.closest('a');
+        const href=permalink?.getAttribute('href')||'';
+        const id=href.match(/\\/status\\/(\\d+)/)?.[1];
+        if(!id||seen.has(id)) continue;
+        seen.add(id);
+        const label=[...article.querySelectorAll('[role="group"][aria-label]')].filter(g=>g.closest('article')===article).at(-1)?.getAttribute('aria-label')||null;
+        const text=article.querySelector('[data-testid="tweetText"]')?.innerText||'';
+        const time=article.querySelector('time')?.getAttribute('datetime')||null;
+        posts.push({id, text:String(text).slice(0,180), time, metrics:label});
+        if(posts.length>=cap) break;
+      }
+      return posts;
+    };
+    let stable=0, prev=-1;
+    for(let i=0;i<8;i++){
+      const snap=snapshot(${JSON.stringify(platform)}, null);
+      if(snap.risk||snap.login) return {...snap, posts:harvest()};
+      const n=document.querySelectorAll('article').length;
+      if(n>=cap) break;
+      if(n===prev) stable++; else stable=0;
+      if(stable>=2) break;
+      prev=n;
+      scrollBy(0, Math.max(500, innerHeight||800));
+      await new Promise(r=>setTimeout(r,600));
+    }
+    try { scrollTo(0,0); } catch {}
+    const snap=snapshot(${JSON.stringify(platform)}, null);
+    return {...snap, posts:harvest()};
+  })()`;
+}
+function mapTimeline(handle, posts, limit) {
+  const out = [];
+  const seen = new Set();
+  for (const post of posts || []) {
+    const id = String(post?.id || '').match(/^\d{5,25}$/)?.[0];
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({
+      sourceKey: `x:status:${id}`,
+      url: `https://x.com/${handle}/status/${id}`,
+      title: String(post.text || `帖子 ${id}`).replace(/\s+/g, ' ').trim().slice(0, 180) || `帖子 ${id}`,
+      status: '已发布',
+      createdAt: post.time || null,
+      metrics: parseMetrics('x', post.metrics) || {},
+      source: '主页时间线',
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
 export function checkIdentity(platform, expected, data) {
   if (data?.risk) throw fault('risk', data.risk);
   if (data?.login) throw fault('login', '请在比特环境中人工登录后重新检查');
@@ -97,7 +157,8 @@ async function instagramMedia(cdp, page, key) {
   return result.metrics;
 }
 
-export async function collectAccount({ profileId, platform, identity, posts = [] }, bit) {
+export async function collectAccount(account, bit) {
+  const { profileId, platform, identity, posts = [] } = account;
   const expected = normalizeIdentity(platform, identity);
   const cdp = await bit.connect(profileId), owned = [], used = [], collectedPosts = [], warnings = [];
   let completed = false;
@@ -137,7 +198,40 @@ export async function collectAccount({ profileId, platform, identity, posts = []
     const ownPage = u => { try { const p = new URL(u).pathname.replace(/\/$/, ''); return platform === 'youtube' ? p === `/channel/${expected}` : p.toLowerCase() === `/${expected}`; } catch { return false; } };
     const follower = await read(home, ownPage, null, d => d.followers != null);
     const followers = numberOf(follower.data.followers);
-    for (const post of posts) {
+    let discovered = [];
+    const timelineLimit = Math.max(0, Math.min(50, Number(account.timelineLimit) || 0));
+    if (platform === 'x' && timelineLimit > 0) {
+      const page = await cdp.create(home);
+      owned.push(page); pages.push(page);
+      let ready;
+      for (let i = 0; i < 12; i++) {
+        ready = await cdp.evaluate(page, expression(platform, null));
+        if (ready?.risk || ready?.login || ready?.identity) break;
+        await new Promise(resolve => setTimeout(resolve, 750));
+      }
+      if (ready?.risk) throw fault('risk', ready.risk);
+      if (ready?.login) throw fault('login', '请在比特环境中人工登录后重新检查');
+      if (!ready?.identity) warnings.push({ reason: '时间线页面未能确认登录身份，已跳过自动发现' });
+      else {
+        checkIdentity(platform, expected, ready);
+        try {
+          const raw = await cdp.evaluate(page, timelineExpression(platform, timelineLimit));
+          if (raw?.risk) throw fault('risk', raw.risk);
+          if (raw?.login) throw fault('login', '请在比特环境中人工登录后重新检查');
+          if (raw?.identity) checkIdentity(platform, expected, raw);
+          discovered = mapTimeline(expected, raw?.posts, timelineLimit);
+        } catch (error) {
+          if (error.code && error.code !== 'error') throw error;
+          warnings.push({ reason: `时间线发现失败：${error.message}` });
+        }
+      }
+    }
+    const rich = new Set(discovered.filter(post => Object.values(post.metrics || {}).some(v => typeof v === 'number')).map(post => post.sourceKey.match(/^x:status:(\d+)$/)?.[1]));
+    const inWindow = new Set(discovered.map(post => post.sourceKey.match(/^x:status:(\d+)$/)?.[1]));
+    const pagePosts = !(timelineLimit > 0 && platform === 'x') ? posts
+      : discovered.length ? posts.filter(post => { const key = postKey(platform, post.url); return key && inWindow.has(key) && !rich.has(key); })
+      : [...posts].sort((a, b) => String(postKey(platform, b.url) || '').localeCompare(String(postKey(platform, a.url) || ''))).slice(0, timelineLimit);
+    for (const post of pagePosts) {
       const key = postKey(platform, post.url);
       if (!key) { warnings.push({ id: post.id, reason: '登记链接缺失或接入版本不支持该作品链接' }); continue; }
       try {
@@ -168,9 +262,9 @@ export async function collectAccount({ profileId, platform, identity, posts = []
       }
     }
     for (const page of new Set(used)) await verify(await cdp.evaluate(page, expression(platform)));
-    if (followers == null && !collectedPosts.length) throw fault('error', '页面未提供可读取指标；保留上次数据');
+    if (followers == null && !collectedPosts.length && !discovered.length) throw fault('error', '页面未提供可读取指标；保留上次数据');
     completed = true;
-    return { identity: expected, followers, posts: collectedPosts, source: follower.source, warnings };
+    return { identity: expected, followers, posts: collectedPosts, discovered, source: follower.source, warnings };
   } finally {
     // Never close the Profile or pre-existing tabs; failed/login/verification pages remain for manual inspection.
     if (completed) for (const page of owned) await cdp.closePage(page).catch(() => {});

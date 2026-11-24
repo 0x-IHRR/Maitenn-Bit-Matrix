@@ -2,7 +2,8 @@
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const initialScope = window.MaitianProfileScope?.scope || scope();
-  let state = {profiles:[],accounts:[],tasks:[]}, discovered = [], error = '', pending = false, bitUrlDraft = null;
+  let state = {profiles:[],accounts:[],tasks:[],alerts:[],monitor:null}, discovered = [], error = '', pending = false, bitUrlDraft = null, scheduleDraft = null;
+  const accountDrafts = new Map();
   const drafts = new Map();
   function scope() { try {const value=decodeURIComponent(document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix');return value==='legacy'?'matrix':value;} catch {return 'matrix';} }
   async function api(path, body) {
@@ -18,6 +19,7 @@
   const stamp = at => at ? new Date(at).toLocaleString('zh-CN') : '尚未获取';
   function capture() {
     const bitUrl=document.querySelector('#bt-api-url');if(bitUrl && (bitUrlDraft!==null || bitUrl.value!==bitUrl.defaultValue))bitUrlDraft=bitUrl.value;
+    document.querySelectorAll('[data-bt-account]').forEach(form => accountDrafts.set(form.dataset.btAccount,{notes:form.elements.notes.value,tags:form.elements.tags.value,displayName:form.elements.displayName.value,enabled:form.elements.enabled.checked,group:form.elements.group.value}));
     document.querySelectorAll('[data-bt-form]').forEach(form => drafts.set(form.dataset.btForm,{identity:form.elements.identity.value,projectPath:form.elements.projectPath.value,ownership:form.elements.ownership.checked}));
   }
   function selector() {
@@ -39,13 +41,29 @@
     return `<div class="bt-account"><div><b>${esc(a.identity)}</b> <span class="st-chip ${archived?'idle':paused(a)?'failed':'idle'}"><i>${paused(a)?'!':'○'}</i>${archived?'历史账号':esc(status(a.status))}</span><div class="fine">粉丝 ${esc(f)} · 粉丝获取 ${esc(stamp(a.followersLastSuccess))} · 作品 ${a.posts?.length||0} 条</div>${a.reason?`<div class="fine bt-error">${esc(a.reason)}</div>`:''}</div>${archived?`<a class="btn" href="/p#/archive" data-bt-history="${esc(a.id)}">查看历史档案</a>`:`<div class="btns"><button class="btn" data-bt-action="update-account" data-id="${esc(a.id)}" ${paused(a)?'disabled':''}>${a.status==='login'?'登录后重新检查':'更新数据'}</button>${paused(a)?`<button class="btn" data-bt-action="resume" data-id="${esc(a.id)}">确认验证并恢复</button>`:''}</div>`}</div>`;
   }
   function panelHTML() {
-    return `<div class="ph"><h3>比特 Profile</h3><span class="note">手动更新 · 默认 2 个环境并行</span></div><p class="fine">选择上方查看范围，可查看 X 矩阵、单个比特环境及历史账号。数据与集成配置独立保存在本工作台。</p><form id="bt-settings-form" class="bt-connection"><label class="lab" for="bt-api-url">本机比特 Local API 地址<input class="inp" id="bt-api-url" name="bitUrl" type="url" value="${esc(bitUrlDraft ?? (state.settings?.bitUrl || 'http://127.0.0.1:54345'))}" placeholder="http://127.0.0.1:54345" required></label><button class="btn" type="submit">保存连接</button></form><div class="btns"><button class="btn" data-bt-action="discover">发现比特环境</button><button class="btn" data-bt-action="refresh">刷新本地状态</button><button class="btn" data-bt-action="update-all">更新已纳管环境</button></div><div id="bt-error" class="fine bt-error" role="status">${esc(error || state.connectionError || '')}</div><div id="bt-discovered">${discovered.map(p=>`<div class="prow"><span>${esc(p.name||p.id)}</span><span class="d">${esc(p.id)}</span>${state.profiles.some(s=>s.id===p.id)?'<span class="st-chip idle"><i>✓</i>已纳管</span>':`<button class="btn" data-bt-action="manage" data-id="${esc(p.id)}">确认纳管</button>`}</div>`).join('')}</div><div id="bt-managed">${state.profiles.map(p=>{
+    const monitor=state.monitor||{};
+    const scheduleNote=`定时 ${monitor.scheduleEnabled?'开':'关'} · 每天 ${monitor.collectsPerDay||1} 次 · 并发 ${monitor.concurrency||1}`;
+    return `<div class="ph"><h3>比特 Profile</h3><span class="note">${esc(scheduleNote)}</span></div><p class="fine">自有账号在比特窗口里只读采集；对标账号走公开接口，不打开比特。定时采集会按需打开窗口，并只关闭本次打开的窗口。</p>${(state.alerts||[]).length?`<div class="bt-alerts" role="status">${state.alerts.map(a=>`<div class="fine bt-error">@${esc(a.identity)} ${esc(a.status)}：${esc(a.reason||'需要处理')}</div>`).join('')}</div>`:''}<form id="bt-settings-form" class="bt-connection"><label class="lab" for="bt-api-url">本机比特 Local API 地址<input class="inp" id="bt-api-url" name="bitUrl" type="url" value="${esc(bitUrlDraft ?? (state.settings?.bitUrl || 'http://127.0.0.1:54345'))}" placeholder="http://127.0.0.1:54345" required></label><button class="btn" type="submit">保存连接</button></form><div class="btns"><button class="btn" data-bt-action="discover">发现比特环境</button><button class="btn" data-bt-action="refresh">刷新本地状态</button><button class="btn" data-bt-action="update-all">更新已纳管环境</button></div><div id="bt-error" class="fine bt-error" role="status">${esc(error || state.connectionError || '')}</div><div id="bt-discovered">${discovered.map(p=>`<div class="prow"><span>${esc(p.name||p.id)}</span><span class="d">${esc(p.id)}</span>${state.profiles.some(s=>s.id===p.id)?'<span class="st-chip idle"><i>✓</i>已纳管</span>':`<button class="btn" data-bt-action="manage" data-id="${esc(p.id)}">确认纳管</button>`}</div>`).join('')}</div><div id="bt-managed">${state.profiles.map(p=>{
       const current = state.accounts.find(a=>a.profileId===p.id && a.platform==='x' && a.active!==false);
       const old = state.accounts.filter(a=>a.profileId===p.id && a.platform==='x' && a.active===false);
       const draft = drafts.get(p.id) || {identity:current?.identity||'',projectPath:current?.projectPath||'',ownership:false};
       const task=state.tasks.find(t=>t.profileId===p.id&&['queued','collecting','running'].includes(t.status));
       return `<details class="bt-profile" ${draft.open?'open':''} data-profile-id="${esc(p.id)}"><summary><b>${esc(p.name||p.id)}</b><span>${p.running?'运行中':'未运行'}${task?' · '+esc(status(task.status)):''}${current?' · '+esc(current.identity):' · 未绑定 X'}</span></summary><div class="btns"><button class="btn" data-bt-action="open" data-id="${esc(p.id)}">打开此环境</button><button class="btn" data-bt-action="update-profile" data-id="${esc(p.id)}">更新此环境</button></div>${current?accountHTML(current):'<p class="fine">填写并确认 X 用户名后可采集粉丝，无需先关联工程。</p>'}<form data-bt-form="${esc(p.id)}"><div class="bt-bind-fields"><label class="lab">X 用户名<input class="inp" name="identity" value="${esc(draft.identity)}" placeholder="your_handle" required></label><label class="lab">本工作台工程 / 发布记录（可选择兼容工程）<input class="inp" name="projectPath" value="${esc(draft.projectPath)}" placeholder="需要关联时填写工程目录，默认留空"></label></div><label class="bt-ownership"><input type="checkbox" name="ownership" ${draft.ownership?'checked':''}>若选择兼容工程，我确认读取该目录，且其中 X 作品归属上述账号。</label><p class="fine">更换账号后，原账号作品与统计留在原账号，新账号独立统计；工程文件不会移动。</p><button class="btn pri" type="submit">确认绑定 / 更换并读取工程</button></form>${old.length?`<div class="fine">历史账号（作品与数据归属保留）</div>${old.map(accountHTML).join('')}`:''}</details>`;
     }).join('') || '<div class="empty" style="min-height:70px">还没有纳管环境，点击“发现比特环境”后选择已有 Profile。</div>'}</div>`;
+  }
+  function monitorValue() {
+    const saved=state.monitor||{};
+    return scheduleDraft||{scheduleEnabled:!!saved.scheduleEnabled,collectsPerDay:saved.collectsPerDay||1,collectHours:(saved.collectHours||[9]).join(','),concurrency:saved.concurrency||1,timelineLimit:saved.timelineLimit||20,intervalMinMinutes:saved.intervalMinMinutes||3,intervalMaxMinutes:saved.intervalMaxMinutes||8};
+  }
+  function adminHTML() {
+    const m=monitorValue();
+    const accounts=state.accounts||[];
+    return `<div class="ph"><h3>采集计划</h3><span class="note">每天最多 2 次 · 号间随机间隔</span></div><form id="bt-schedule-form" class="bt-admin"><label class="bt-ownership"><input type="checkbox" name="scheduleEnabled" ${m.scheduleEnabled?'checked':''}>启用定时采集（Asia/Shanghai）</label><div class="bt-bind-fields"><label class="lab">每天次数<select class="inp" name="collectsPerDay"><option value="1" ${String(m.collectsPerDay)==='1'?'selected':''}>1</option><option value="2" ${String(m.collectsPerDay)==='2'?'selected':''}>2</option></select></label><label class="lab">小时（个数与次数一致，如 9 或 9,21）<input class="inp" name="collectHours" value="${esc(m.collectHours)}" required></label><label class="lab">并发<select class="inp" name="concurrency"><option value="1" ${String(m.concurrency)==='1'?'selected':''}>串行</option><option value="2" ${String(m.concurrency)==='2'?'selected':''}>2</option></select></label><label class="lab">时间线条数<input class="inp" name="timelineLimit" type="number" min="1" max="50" value="${esc(m.timelineLimit)}" required></label><label class="lab">间隔最少（分钟）<input class="inp" name="intervalMinMinutes" type="number" min="1" max="180" value="${esc(m.intervalMinMinutes)}" required></label><label class="lab">间隔最多（分钟）<input class="inp" name="intervalMaxMinutes" type="number" min="1" max="180" value="${esc(m.intervalMaxMinutes)}" required></label></div><div class="btns"><button class="btn pri" type="submit">保存采集计划</button><button class="btn" type="button" data-bt-action="collect-now">按当前时间跑一轮到期账号</button></div><p class="fine">自有号按需 /browser/open，读完只关闭这次打开的窗口。登录页、验证码或限流会暂停该号并留在面板告警里，不会连续重试。对标号不走比特。</p></form><div class="ph"><h3>账号</h3><span class="note">自有 / 对标 · 备注、标签、启停</span></div><form id="bt-benchmark-form" class="bt-admin"><div class="bt-bind-fields"><label class="lab">对标用户名<input class="inp" name="identity" placeholder="public_handle" required></label><label class="lab">备注<input class="inp" name="notes" placeholder="可选"></label><label class="lab">标签<input class="inp" name="tags" placeholder="逗号分隔"></label></div><button class="btn pri" type="submit">添加对标账号</button><p class="fine">对标账号只读 api.fxtwitter.com / api.vxtwitter.com，也可由外部 JSON 导入。</p></form><div id="bt-account-admin">${accounts.map(accountHTMLAdmin).join('') || '<div class="empty" style="min-height:48px">还没有账号。</div>'}</div>`;
+  }
+  function accountHTMLAdmin(a) {
+    const draft=accountDrafts.get(a.id)||{notes:a.notes||'',tags:(a.tags||[]).join(','),displayName:a.displayName||'',enabled:a.enabled!==false,group:a.group||'owned'};
+    const group=a.group==='benchmark'?'对标':'自有';
+    return `<form class="bt-account-edit" data-bt-account="${esc(a.id)}"><div class="bt-row"><b>@${esc(a.identity)}</b><span class="st-chip idle"><i>○</i>${group}</span><span class="fine">${a.enabled===false?'已停用':esc(status(a.status))}</span></div><div class="bt-bind-fields"><label class="lab">显示名<input class="inp" name="displayName" value="${esc(draft.displayName)}"></label><label class="lab">备注<input class="inp" name="notes" value="${esc(draft.notes)}"></label><label class="lab">标签<input class="inp" name="tags" value="${esc(draft.tags)}"></label><label class="lab">分组<select class="inp" name="group"><option value="owned" ${draft.group==='owned'?'selected':''}>自有</option><option value="benchmark" ${draft.group==='benchmark'?'selected':''}>对标</option></select></label></div><label class="bt-ownership"><input type="checkbox" name="enabled" ${draft.enabled?'checked':''}>启用采集</label><div class="btns"><button class="btn pri" type="submit">保存</button><button class="btn" type="button" data-bt-action="unbind-account" data-id="${esc(a.id)}">解绑</button><button class="btn" type="button" data-bt-action="delete-account" data-id="${esc(a.id)}">删除</button></div></form>`;
   }
   function panel(force=false) {
     if (location.hash !== '#/system') return;
@@ -56,7 +74,7 @@
     if (panel) capture();
     const opened=new Set([...document.querySelectorAll('.bt-profile[open]')].map(el=>el.dataset.profileId));
     if (!panel) {panel=document.createElement('section');panel.id='bt-profiles-panel';panel.className='panel';const lead=app.querySelector('.lead');if(lead)lead.after(panel);else app.append(panel);}
-    panel.innerHTML=panelHTML();
+    panel.innerHTML=panelHTML()+adminHTML();
     panel.querySelectorAll('.bt-profile').forEach(el=>{if(opened.has(el.dataset.profileId))el.open=true;});
   }
   function mount() {selector();panel();}
@@ -75,8 +93,44 @@
     opened.forEach(id=>{const draft=drafts.get(id);if(draft)draft.open=true;});
   });
   addEventListener('maitian:render',mount);
-  document.addEventListener('input',event=>{if(event.target.id==='bt-api-url')bitUrlDraft=event.target.value;});
+  function captureSchedule(form) {
+    if (!form) return;
+    scheduleDraft={scheduleEnabled:form.elements.scheduleEnabled.checked,collectsPerDay:form.elements.collectsPerDay.value,collectHours:form.elements.collectHours.value,concurrency:form.elements.concurrency.value,timelineLimit:form.elements.timelineLimit.value,intervalMinMinutes:form.elements.intervalMinMinutes.value,intervalMaxMinutes:form.elements.intervalMaxMinutes.value};
+  }
+  document.addEventListener('input',event=>{
+    if(event.target.id==='bt-api-url')bitUrlDraft=event.target.value;
+    const schedule=event.target.closest?.('#bt-schedule-form'); if(schedule) captureSchedule(schedule);
+  });
+  document.addEventListener('change',event=>{const schedule=event.target.closest?.('#bt-schedule-form'); if(schedule) captureSchedule(schedule);});
   document.addEventListener('submit',async event=>{
+    if(event.target.id==='bt-schedule-form'){
+      event.preventDefault();captureSchedule(event.target);const button=event.target.querySelector('button[type="submit"]');button.disabled=true;
+      const d=scheduleDraft;
+      try{await api('settings',{scheduleEnabled:d.scheduleEnabled,collectsPerDay:Number(d.collectsPerDay),collectHours:d.collectHours,concurrency:Number(d.concurrency),timelineLimit:Number(d.timelineLimit),intervalMinMinutes:Number(d.intervalMinMinutes),intervalMaxMinutes:Number(d.intervalMaxMinutes)});scheduleDraft=null;await refresh(true);}
+      catch(e){error=e.message;const el=document.querySelector('#bt-error');if(el)el.textContent=error;}
+      finally{button.disabled=false;}return;
+    }
+    if(event.target.id==='bt-benchmark-form'){
+      event.preventDefault();const form=event.target;const button=form.querySelector('button');button.disabled=true;
+      try{await api('accounts',{action:'create',group:'benchmark',platform:'x',identity:form.elements.identity.value,notes:form.elements.notes.value,tags:form.elements.tags.value});form.reset();error='对标账号已添加。';await refresh(true);}
+      catch(e){error=e.message;const el=document.querySelector('#bt-error');if(el)el.textContent=error;}
+      finally{button.disabled=false;}return;
+    }
+    const accountForm=event.target.closest('[data-bt-account]');
+    if(accountForm){
+      event.preventDefault();capture();const id=accountForm.dataset.btAccount;const d=accountDrafts.get(id);const button=accountForm.querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        const current=state.accounts.find(a=>a.id===id);
+        const patch={action:'update',id,notes:d.notes,tags:d.tags,displayName:d.displayName,enabled:d.enabled,group:d.group};
+        if(d.group==='owned' && current?.group!=='owned'){
+          const profileId=prompt('改为自有账号需要比特环境 ID');
+          if(!profileId) return;
+          patch.profileId=profileId.trim();
+        }
+        await api('accounts',patch);accountDrafts.delete(id);error='账号已保存。';await refresh(true);
+      }catch(e){error=e.message;const el=document.querySelector('#bt-error');if(el)el.textContent=error;}
+      finally{button.disabled=false;}return;
+    }
     if(event.target.id==='bt-settings-form'){
       event.preventDefault();capture();const button=event.target.querySelector('button');button.disabled=true;
       try{await api('settings',{bitUrl:event.target.elements.bitUrl.value.trim(),maitianRoot:''});await refresh(true);}
@@ -107,6 +161,9 @@
       else if(action==='update-account'){await api('update',{accountIds:[id]});await refresh(true);}
       else if(action==='update-all'){await api('update',{profileIds:state.profiles.map(p=>p.id)});await refresh(true);}
       else if(action==='resume'){if(!confirm('确认已在比特环境完成平台验证并核对登录账号？恢复后仍需手动更新。'))return;await api('resume',{accountId:id,confirmed:true});await refresh(true);}
+      else if(action==='collect-now'){await api('collect',{});error='已检查到期账号。';await refresh(true);}
+      else if(action==='unbind-account'){if(!confirm('解绑后保留账号、帖子和历史，只解除与比特环境的对应。'))return;await api('accounts',{action:'unbind',id});await refresh(true);}
+      else if(action==='delete-account'){if(!confirm('删除账号会同时删除它的帖子和采集历史，且不能恢复。'))return;await api('accounts',{action:'delete',id});await refresh(true);}
     }catch(e){error=e.message;const el=document.querySelector('#bt-error');if(el)el.textContent=error;}finally{b.disabled=false;}
   });
   mount();refresh(true);setInterval(()=>{if(!document.hidden)refresh(true);},8000);

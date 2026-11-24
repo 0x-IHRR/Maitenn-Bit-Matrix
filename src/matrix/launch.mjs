@@ -8,8 +8,9 @@ fs.mkdirSync(data,{recursive:true,mode:0o700});
 const runtime=path.join(data,'config.json');
 if(!fs.existsSync(runtime)) {
   fs.writeFileSync(runtime,JSON.stringify({
-    name:'比特媒体矩阵',matrixWorkbench:true,rootPath:path.join(root,'projects'),keepAlive:[],disabled:[],
-    web:{host:'127.0.0.1',port:8790,key:'',login:''},site:{enabled:false},telegram:{enabled:false}
+    name:'比特媒体矩阵',product:'方正矩阵助手',matrixWorkbench:true,rootPath:path.join(root,'projects'),keepAlive:[],disabled:[],
+    web:{host:'127.0.0.1',port:8790,key:'',login:''},site:{enabled:false},telegram:{enabled:false},
+    matrix:{bitUrl:'http://127.0.0.1:54345',timelineLimit:20,scheduleEnabled:false,collectsPerDay:1,collectHours:[9],concurrency:1,intervalMinMinutes:3,intervalMaxMinutes:8}
   },null,2)+'\n',{mode:0o600});
 }
 return {runtime,dbPath:path.join(data,'workbench.db')};
