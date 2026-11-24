@@ -57,7 +57,7 @@ export class CollectionQueue {
         this.store.status(id,'collecting');
         await this.prepareAccount(account);
         account=this.store.account(id);
-        const discover=!task.postIds && !['followers','doctor','sync','verify'].includes(task.kind);
+        const discover=!task.postIds && !['followers','doctor','verify'].includes(task.kind);
         const timelineLimit=discover ? Number(account && this.store.settings().timelineLimit || 20) : 0;
         const result=await this.collector({...account,posts:task.postIds?account.posts.filter(p=>task.postIds.includes(p.id)):account.posts,action:task.kind,timelineLimit},this.bitFactory());
         const current=this.store.account(id);

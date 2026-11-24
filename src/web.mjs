@@ -1,11 +1,8 @@
-// 麦田：本地网页。播种（发布）、长势（流量）、收成（转化）、粮仓（档案）
-import http from 'node:http'; import crypto from 'node:crypto'; import fs from 'node:fs'; import path from 'node:path'; import { spawn, execFileSync } from 'node:child_process'; import { fileURLToPath } from 'node:url';
+// 方正矩阵助手：本地只读监控页。总览、流量与周报、档案与复盘、系统与健康。
+import http from 'node:http'; import crypto from 'node:crypto'; import fs from 'node:fs'; import path from 'node:path'; import { execFileSync } from 'node:child_process'; import { fileURLToPath } from 'node:url';
 import { db, NAMES, STATE_CN, episodes, getEpisode, getTasks, recentLogs, getSnapshot, getMeta, setMeta } from './db.mjs';
 import { config, testFeishu, testTelegram } from './feishu.mjs';
-import { SITE, siteOn, refreshSite } from './site.mjs';
-import { applyFeishuPatch, applyTelegramPatch, applySitePatch, saveConfig, testSite } from './config-admin.mjs';
-import { learnOn, learnUrl } from './learn.mjs';
-import { review } from './review.mjs';
+import { applyFeishuPatch, applyTelegramPatch, saveConfig } from './config-admin.mjs';
 import { accessEmail } from './access.mjs';
 import { initLogin, sessionOk, handleLogin } from './login.mjs';
 
@@ -18,8 +15,8 @@ const nickOf = (name, pj) => (pj && pj.nick) || (short(name).split(/[，,？?！
 const latest = db.prepare('SELECT * FROM metrics WHERE episode_id=? AND platform=? ORDER BY day DESC LIMIT 1');
 const actions = [];   // 最近的操作（内存里）
 let extension = null;
-// 平台管理：登录状态、按平台打开登录页、停用/启用（停用写 config.disabled）
-const PLATFORMS = ['bilibili', 'douyin', 'xhs', 'channels', 'youtube', 'x', 'instagram'];   // 知识站不是平台账号，不在这里
+// 平台管理：登录状态、停用/启用（停用写 config.disabled）。只读监控，不打开平台发布页。
+const PLATFORMS = ['bilibili', 'douyin', 'xhs', 'channels', 'youtube', 'x', 'instagram'];
 const CFG = process.env.MAITIAN_CONFIG || path.join(ROOT, 'config.json');
 const platformList = () => PLATFORMS.map(id => ({ id, name: NAMES[id] || id, state: getMeta(`login:${id}`) || '', reason: getMeta(`loginReason:${id}`) || '', day: getMeta(`loginDay:${id}`) || '', disabled: (config.disabled || []).includes(id) }));
 
@@ -40,15 +37,13 @@ function episodeView(ep, full = false) {
     out.logs = recentLogs(ep.id, 200);
     out.metrics = db.prepare('SELECT day, platform, views, likes, comments, favorites, shares FROM metrics WHERE episode_id=? ORDER BY day').all(ep.id);
     out.snapshotAt = snap && snap.taken_at;
-    // 复盘：已经到了第 1/3/7 天的节点（和飞书卡片同一套算法）
-    const t0 = Date.parse(ep.schedule || ep.created_at);
-    out.reviews = tasks.some(t => t.state === 'published') ? [1, 3, 7].filter(a => Date.now() >= t0 + a * 864e5 || a === 1).map(a => { try { const r = review(ep, a); return { age: a, partial: Date.now() < t0 + a * 864e5, views: r.cur.views, ints: r.cur.ints, rows: r.cur.rows.map(x => ({ p: x.p, views: x.m.views, inter: x.m.likes + x.m.comments + x.m.favorites + x.m.shares })), prev: r.prev && { nick: r.prev.nick, views: r.prev.views, rows: r.prev.rows.map(x => ({ p: x.p, views: x.m.views })) }, fans: r.fans.sum, conv: r.conv || null }; } catch { return null; } }).filter(Boolean) : [];
+    out.reviews = [];
     out.files = ['成片.mp4', '字幕.srt', '发布素材.md', 'publish.json', '发布记录.json'].filter(f => fs.existsSync(path.join(ep.dir, f)));
   }
   return out;
 }
 
-const ACT = { links: '取链接', mark: '标记', 'login-expired': '登录过期', upload: '上传', fill: '填写', submit: '提交', verify: '核对', state: '状态', 'start-batch': '开跑', plan: '登记计划', 'manual-submit': '手动提交', 'metrics-error': '采集出错', 'screenshot-error': '截图失败', 'article-job': '长文', 'deferred-run': '自动建课' };
+const ACT = { links: '读取', mark: '标记', 'login-expired': '登录过期', verify: '核对', state: '状态', 'metrics-error': '采集出错', 'screenshot-error': '截图失败' };
 function feed(n = 14) {
   const names = Object.fromEntries(episodes().map(e => [e.id, e.episode])), nicks = Object.fromEntries(episodes().map(e => [e.id, nickOf(e.name, readPj(e.dir))]));
   return db.prepare('SELECT * FROM logs ORDER BY id DESC LIMIT ?').all(n).map(l => {
@@ -79,11 +74,8 @@ function widgetData() {
   const now = Date.now();
   const pub = latestPublished();
   const ev = pub && episodeView(pub);
-  const days = SITE ? db.prepare('SELECT * FROM site_daily WHERE day >= ? ORDER BY day').all(ago(today, 6)) : [];
-  const zsz = stat('zsz');
-  return { name: config.name || '麦田', owner: W.owner || '', avatar: !!W.avatar, fans: { total: sum('total'), today: sum('today'), week: sum('week') }, platforms,
+  return { name: config.name || '方正矩阵助手', owner: W.owner || '', avatar: !!W.avatar, fans: { total: sum('total'), today: sum('today'), week: sum('week') }, platforms,
     latest: ev && { title: ev.short, nick: ev.nick, views: ev.views, inter: ev.inter, hours: Math.round((now - Date.parse(pub.schedule)) / 36e5) },
-    site: SITE && { name: SITE.name, users: zsz && zsz.total, reg: days.reduce((n, d) => n + (d.reg || 0), 0), vip: days.reduce((n, d) => n + (d.vip || 0), 0), revenue: days.reduce((n, d) => n + (d.revenue || 0), 0) },
     metricsDay: getMeta('metricsDay') || '', now: new Date().toISOString() };
 }
 const tokenEq = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -93,7 +85,7 @@ const widgetPage = (code) => `<!doctype html><html lang="zh-CN"><head><meta char
 button{width:100%;height:50px;border:0;border-radius:14px;background:#1c1a16;color:#fff;font-size:17px;font-weight:800;margin:14px 0}pre{background:#fff;border-radius:12px;padding:12px;font-size:11px;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 .tip{font-size:13px;color:#7a7160}</style></head><body><h1>🌾 麦田小组件</h1>
 <ol><li>App Store 安装 <b>Scriptable</b>（免费）</li><li>点下面的按钮复制脚本（自动更新的加载器，只需粘贴这一次）</li><li>打开 Scriptable → 右上角 <b>＋</b> → 粘贴 → 标题改成「麦田」；已经有「麦田」脚本的，打开它全选、粘贴覆盖</li><li>长按桌面 → 左上角 <b>＋</b> → 搜 Scriptable → 选中号 → 添加；长按小组件 → 编辑小组件 → Script 选「麦田」</li><li>锁屏：长按锁屏 → 自定 → 添加小组件 → Scriptable → 同样选「麦田」</li></ol>
-<button id="b">复制脚本</button><p class="tip">以后小组件改样式，手机上会自动用上新版，不用再粘贴。脚本里带着小组件口令，只能读汇总数字（粉丝、播放、站点近 7 天），打不开麦田别的页面。别发给别人；泄露了在 config.json 换一个 widgetToken 即可。</p>
+<button id="b">复制脚本</button><p class="tip">以后小组件改样式，手机上会自动用上新版，不用再粘贴。脚本里带着小组件口令，只能读汇总数字（粉丝、播放），打不开别的页面。别发给别人；泄露了在 config.json 换一个 widgetToken 即可。</p>
 <pre id="c"></pre><script>const code=${JSON.stringify(code).replace(/</g, '\\u003c')};document.getElementById('c').textContent=code;
 document.getElementById('b').onclick=async()=>{try{await navigator.clipboard.writeText(code);b.textContent='已复制 ✓';}catch{const r=document.createRange();r.selectNodeContents(c);getSelection().removeAllRanges();getSelection().addRange(r);b.textContent='长按选中的文字复制';}};</script></body></html>`;
 
@@ -109,23 +101,12 @@ function thumb(f, w) {
   } catch { return null; }
 }
 
-// ---------- 集成管理（飞书 / 知识站） ----------
+// ---------- 集成管理（飞书 / Telegram） ----------
 const metaJson = (k) => { const v = getMeta(k); if (!v) return null; try { return JSON.parse(v); } catch { return null; } };
 function integrations() {
-  const cs = config.site || {};
-  const summary = SITE ? (() => {
-    const rows = db.prepare("SELECT day, reg, revenue FROM site_daily WHERE day >= date('now','localtime','-7 day')").all();
-    return { reg: rows.reduce((n, r) => n + (r.reg || 0), 0), revenue: rows.reduce((n, r) => n + (r.revenue || 0), 0) };
-  })() : null;
   return {
     telegram: { enabled: config.telegram?.enabled === true, chatId: config.telegram?.chatId || '', hasToken: !!config.telegram?.botToken, lastTest: metaJson('integrations.telegram.lastTest') },
     feishu: { webhook: config.feishuWebhook || '', login: W.login === 'feishu', lastTest: metaJson('integrations.feishu.lastTest') },
-    site: {
-      enabled: siteOn(), name: cs.name || '', base: cs.base || '',
-      adminPath: cs.adminPath || '/admin', coursesApi: cs.coursesApi || '/api/courses?admin=1',
-      dashboardApi: cs.dashboardApi || '/api/admin/dashboard', coursePath: cs.coursePath || '/series/{seriesId}?courseId={id}',
-      logo: cs.logo || '', lastTest: metaJson('integrations.site.lastTest'), summary,
-    },
   };
 }
 const readJson = (req) => new Promise((res, rej) => { let b = ''; req.on('data', (d) => { b += d; if (b.length > 20000) req.destroy(); }); req.on('end', () => { try { res(JSON.parse(b || '{}')); } catch { res({}); } }); req.on('error', rej); });
@@ -178,16 +159,15 @@ async function handle(req, res) {
   if (extension && await extension.handle(req,res,u,send)) return;
   if(extension && ['/api/overview','/api/episode','/api/action','/api/platform-toggle','/cover','/shot'].includes(u.pathname))return send(res,404,{error:'当前矩阵范围没有该数据或操作'});
   if (u.pathname === '/api/overview') {
-    return send(res, 200, { name: config.name || '麦田', siteOn: !!SITE, learn: learnOn(config) ? learnUrl('maitian-board') : '', siteName: SITE ? SITE.name : '', siteLogo: !!(SITE && config.site.logo), board: config.board && config.board.url, driver: config.driver,
+    return send(res, 200, { name: config.name || '方正矩阵助手', siteOn: false, learn: '', siteName: '', siteLogo: false, board: null, driver: 'BitBrowser',
       episodes: episodes().sort((a, b) => (b.episode || 0) - (a.episode || 0)).map(e => episodeView(e)), actions: actions.slice(-8).reverse(),
-      site: { days: db.prepare('SELECT * FROM site_daily ORDER BY day').all(), channels: db.prepare('SELECT * FROM site_channels ORDER BY revenue DESC').all(),
-        campaigns: db.prepare('SELECT * FROM site_campaigns ORDER BY reg DESC').all(), campaignsOn: getMeta('siteCampaigns') === 'on' },
+      site: { days: [], channels: [], campaigns: [], campaignsOn: false },
       metrics: db.prepare('SELECT day, episode_id, platform, views FROM metrics ORDER BY day').all(),
       followers: db.prepare("SELECT day, platform, total, gain, loss, source FROM followers WHERE day >= date('now','localtime','-40 day') ORDER BY day").all(),
       samples: db.prepare('SELECT ts, episode_id, platform, views FROM samples ORDER BY ts').all(),
       feed: feed(), health: { nas: fs.existsSync(config.rootPath), chrome: await chromeUp(), metricsDay: getMeta('metricsDay') || '', doctorDay: getMeta('doctorDay') || '', platforms: platformList() }, now: new Date().toISOString() });
   }
-  if (u.pathname === '/site-logo') { const f = SITE && config.site.logo && path.resolve(ROOT, config.site.logo); return f && fs.existsSync(f) ? send(res, 200, fs.readFileSync(f), /\.svg$/.test(f) ? 'image/svg+xml' : /\.jpe?g$/.test(f) ? 'image/jpeg' : 'image/png', { 'cache-control': 'max-age=3600' }) : send(res, 404, ''); }
+  if (u.pathname === '/site-logo') return send(res, 404, '');
   if (u.pathname === '/api/episode') { const ep = getEpisode(u.searchParams.get('id')); return ep ? send(res, 200, episodeView(ep, true)) : send(res, 404, { error: '没有这一期' }); }
   if (u.pathname === '/cover' || u.pathname === '/shot') {
     const ep = getEpisode(u.searchParams.get('id')); if (!ep) return send(res, 404, '');
@@ -221,29 +201,10 @@ async function handle(req, res) {
     W = config.web || W;   // applyFeishuPatch 可能替换了 config.web 对象
     return send(res, 200, { feishu: integrations().feishu });
   }
-  if (u.pathname === '/api/integrations/site' && req.method === 'POST') {
-    const a = await readJson(req), backup = snapConfig();
-    try {
-      applySitePatch(config, { enabled: a.enabled === undefined ? undefined : a.enabled === true, name: a.name, base: a.base, adminPath: a.adminPath, coursesApi: a.coursesApi, dashboardApi: a.dashboardApi, coursePath: a.coursePath, logo: a.logo });
-      saveConfig(config);
-    } catch (e) {
-      rollbackConfig(backup);
-      const msg = e.message || '';
-      return send(res, /先填站点地址/.test(msg) ? 400 : 500, { error: /先填站点地址/.test(msg) ? msg : ('写配置失败：' + msg) });
-    }
-    refreshSite();
-    return send(res, 200, { site: integrations().site });
-  }
   if (u.pathname === '/api/integrations/feishu/test' && req.method === 'POST') {
     const a = await readJson(req);
     const r = await testFeishu(a.webhook === undefined ? config.feishuWebhook : String(a.webhook).trim());
     setMeta('integrations.feishu.lastTest', JSON.stringify({ ...r, ts: new Date().toISOString() }));
-    return send(res, 200, r);
-  }
-  if (u.pathname === '/api/integrations/site/test' && req.method === 'POST') {
-    const a = await readJson(req);
-    const r = await testSite({ base: a.base, adminPath: a.adminPath, coursesApi: a.coursesApi, dashboardApi: a.dashboardApi });
-    setMeta('integrations.site.lastTest', JSON.stringify({ ...r, ts: new Date().toISOString() }));
     return send(res, 200, r);
   }
   if (u.pathname === '/api/platform-toggle' && req.method === 'POST') {
@@ -259,28 +220,7 @@ async function handle(req, res) {
     });
     return;
   }
-  if (u.pathname === '/api/action' && req.method === 'POST') {
-    let body = ''; req.on('data', d => body += d); req.on('end', () => {
-      let a; try { a = JSON.parse(body); } catch { return send(res, 400, { error: '请求格式不对' }); }
-      const map = { sync: ['sync', a.id], metrics: a.id ? ['metrics', a.id] : ['metrics'],
-        doctor: ['doctor', ...(a.platform && PLATFORMS.includes(a.platform) ? ['--only', a.platform, '--quiet'] : ['--notify'])],
-        board: ['board'], followers: ['followers'],
-        login: ['login', ...(a.platform && PLATFORMS.includes(a.platform) ? ['--only', a.platform] : [])],
-        mark: ['mark', a.id, a.platform, a.state, a.note || '在麦田里标记', ...(a.url ? ['--url', a.url] : [])] };
-      const argv = map[a.type];
-      if (!argv || argv.some(x => x === undefined || x === null || x === '')) return send(res, 400, { error: '不支持的操作' });
-      if (a.type === 'mark' && (a.state !== 'published' || !getEpisode(a.id) || !NAMES[a.platform])) return send(res, 400, { error: '状态不对' });
-      // 登录不受「同一时间只跑一个」限制：掉线时正体检着也要能马上打开登录页
-      if (actions.some(x => !x.done && x.type !== 'mark') && !['mark', 'login'].includes(a.type)) return send(res, 409, { error: '上一个操作还在跑，等它结束' });
-      const rec = { type: a.type, platform: a.platform && PLATFORMS.includes(a.platform) ? a.platform : '', label: { sync: '取链接', metrics: '采流量', doctor: '体检', board: '同步知识站数据', followers: '采粉丝', mark: '标记状态', login: '打开登录页', retry: '重跑平台' }[a.type] + (a.platform ? ` · ${NAMES[a.platform] || a.platform}` : ''), startedAt: new Date().toISOString(), done: false, ok: null, tail: '' };
-      actions.push(rec);
-      const ch = spawn(process.execPath, [path.join(DIR, 'hub.mjs'), ...argv], { cwd: ROOT, env: { ...process.env, HUB_NO_WEB: '1' } });
-      const on = (d) => { rec.tail = (rec.tail + d).slice(-600); }; ch.stdout.on('data', on); ch.stderr.on('data', on);
-      ch.on('close', (code) => { rec.done = true; rec.ok = code === 0; rec.endedAt = new Date().toISOString(); });
-      send(res, 200, { ok: true });
-    });
-    return;
-  }
+  if (u.pathname === '/api/action' && req.method === 'POST') return send(res, 400, { error: '该操作已移除。面板只读采集，不提供发布或知识站操作。' });
   send(res, 404, { error: 'not found' });
 }
 export function startWeb(options = {}) {

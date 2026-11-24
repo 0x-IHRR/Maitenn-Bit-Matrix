@@ -6,7 +6,7 @@ body:
     id: part
     attributes:
       label: 哪一块
-      options: [发布（hub run / plan）, 数据采集（日报 / 粉丝）, 复盘 / 周报, 网页大屏, 飞书通知, 安装向导 / 演示模式, 其他]
+      options: [数据采集（粉丝 / 帖子）, 复盘 / 周报, 网页大屏, 账号管理, 健康检查, 飞书或 Telegram 通知, 其他]
     validations: { required: true }
   - type: dropdown
     id: platform
@@ -18,7 +18,7 @@ body:
     id: what
     attributes:
       label: 发生了什么
-      description: 期望是什么、实际是什么。贴上 node src/hub.mjs status <id> --logs 的相关几行（记得去掉链接里的个人信息）
+      description: 期望是什么、实际是什么。可以贴页面地址和接口返回（记得去掉账号和通知凭据）
     validations: { required: true }
   - type: input
     id: env

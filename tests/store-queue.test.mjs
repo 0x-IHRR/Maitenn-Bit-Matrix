@@ -39,7 +39,7 @@ test('缺失字段不覆盖旧值、失败和本地读取不伪造成功时间',
   store.close();
 });
 
-test('原生取链接只更新归属明确的作品，本地重读不覆盖较新的链接',()=>{
+test('作品链接只更新归属明确的记录，本地重读不覆盖较新的链接',()=>{
   const {store,ids}=setup();const id=ids[0];
   store.importPosts(id,[{sourceKey:'project',title:'作品',url:'',status:'等待',metrics:{}}]);
   const post=store.account(id).posts[0];

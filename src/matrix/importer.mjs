@@ -1,6 +1,7 @@
 import { readFile, readdir, realpath, stat } from 'node:fs/promises';
-import { join, isAbsolute } from 'node:path';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { isAbsolutePath } from './paths.mjs';
 
 async function json(file, optional = false) {
   try { if ((await stat(file)).size > 4 * 1024 * 1024) throw new Error('工程记录文件过大'); return JSON.parse(await readFile(file, 'utf8')); }
@@ -8,7 +9,7 @@ async function json(file, optional = false) {
 }
 // Source files and the upstream database are read-only. No platform calls or hub commands.
 export async function readProjects(projectPath, platform, maitianRoot = '') {
-  if (!isAbsolute(projectPath || '')) throw new Error('请填写已有麦田工程的绝对目录');
+  if (!isAbsolutePath(projectPath || '')) throw new Error('请填写已有麦田工程的绝对目录');
   const root = await realpath(projectPath);
   const dirs = [];
   async function walk(dir, depth) {

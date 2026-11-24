@@ -1,7 +1,7 @@
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const CFG = process.env.MAITIAN_CONFIG || path.join(ROOT, 'config.json');
-if (!fs.existsSync(CFG)) { console.error('还没有 config.json：先运行 node src/init.mjs（安装向导），或者 node src/demo.mjs 用假数据看看效果'); process.exit(1); }
+if (!fs.existsSync(CFG)) { console.error('还没有配置：直接 npm start，会在 data/config.json 写入只读监控配置；也可以从 config.example.json 复制。'); process.exit(1); }
 export const config = JSON.parse(fs.readFileSync(CFG, 'utf8'));
 
 // ---------- 文字 → 飞书卡片（2026-11-14） ----------

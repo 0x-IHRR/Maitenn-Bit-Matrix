@@ -34,7 +34,6 @@ if [[ "$1" == "--uninstall" ]]; then
   for l in "$PREFIX.daemon" "$PREFIX.tunnel"; do launchctl bootout "gui/$UID_/$l" 2>/dev/null && echo "已卸载 $l"; rm -f "$AGENTS/$l.plist"; done
   exit 0
 fi
-[[ -f "$ROOT/config.json" ]] || { echo "先复制 config.example.json 为 config.json 并填好"; exit 1; }
-plist "$PREFIX.daemon" src/hub.mjs daemon daemon.log
+plist "$PREFIX.daemon" src/matrix/launch.mjs "" daemon.log
 [[ "$1" == "--tunnel" ]] && plist "$PREFIX.tunnel" src/tunnel.mjs "" tunnel.log
 echo "重启守护进程：launchctl kickstart -k gui/$UID_/$PREFIX.daemon"
