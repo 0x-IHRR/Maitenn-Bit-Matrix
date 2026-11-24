@@ -47,14 +47,18 @@ export function nativeOverview(store, running, connectionError, profileId='') {
       inter:interactions?.every(validMetric)?interactions.reduce((x,y)=>x+y,0):null,
       profileId:a.profileId,accountId:a.id,identity:a.identity,lastSuccess:p.lastSuccess||null,dir:p.projectPath,durationSec:p.durationSec||0,
       logs:p.logs||[],metrics:history,files:p.files||[],reviews,snapshotAt:null,campaign:p.campaign||'',
+      accountAnalytics:a.analytics||null,analyticsIssue:a.analyticsIssue||null,
       tasks:[{platform:'x',name:'X',state:nativeStates[p.status]||p.status,stateCn:stateNames[p.status]||p.status||'已登记',url:p.url||'',detail:p.detail||'',updatedAt:p.lastSuccess||null,
-        copy:p.copy||{title:p.title||'',body:'',tags:[],covers:[]},shot:false,m:metrics&&{...metrics,extra:p.extra||{},collectedAt:p.lastSuccess,metricTimes:p.metricTimes||{}}}]};
+        analytics:p.analytics||null,
+        copy:p.copy||{title:p.title||'',body:'',tags:[],covers:[]},shot:false,m:(metrics||p.analytics)&&{...(metrics||{}),impressions:p.analytics?.impressions??null,engagementRate:p.analytics?.engagementRate??null,profileVisits:p.analytics?.profileVisits??null,linkClicks:p.analytics?.linkClicks??null,extra:p.extra||{},collectedAt:p.lastSuccess,metricTimes:p.metricTimes||{}}}]};
   }));
   const allReady=accounts.length>0&&accounts.every(a=>a.status==='ready');
   const paused=accounts.some(a=>['paused','mismatch','login','failed'].includes(a.status));
+  const sumOf = key => { const values = accounts.map(a => a.analytics?.[key]).filter(validMetric); return values.length ? values.reduce((total, value) => total + value, 0) : null; };
+  const analytics = { impressions: sumOf('impressions'), profileVisits: sumOf('profileVisits'), linkClicks: sumOf('linkClicks'), accounts: accounts.filter(a => a.group !== 'benchmark').map(a => ({ id: a.id, identity: a.identity, ...(a.analytics || {}), issue: a.analyticsIssue || null, history: a.analyticsHistory || [] })) };
   const issues=healthIssues({ accounts, connectionError });
   samples.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
-  return {name:'比特媒体矩阵',matrixReadOnly:!!historyId,episodes,followers,samples,actions:[],feed:[],siteOn:false,site:{days:[],channels:[],campaigns:[]},weekly:weeklyReport(accounts),
+  return {name:'比特媒体矩阵',matrixReadOnly:!!historyId,episodes,followers,samples,analytics,actions:[],feed:[],siteOn:false,site:{days:[],channels:[],campaigns:[]},weekly:weeklyReport(accounts),
     health:{nas:false,chrome:profiles.some(p=>running.has(p.id)),issues,platforms:[{id:'x',disabled:false,state:paused?'out':allReady?'ok':'',reason:paused?'有账号需要处理':issues.find(issue=>issue.code==='bit')?.text||''}]},
     scope:{profiles,selectedProfileId:profileId,accountCount:accounts.length,availableAccountCount:accounts.filter(a=>validMetric(a.followers)).length,
       profileCount:profiles.length,runningCount:profiles.filter(p=>running.has(p.id)).length,

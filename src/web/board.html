@@ -188,7 +188,8 @@ function render() {
       <div class="headline"><div class="val xl">${fansTotal == null ? '未获取' : fmt(fansTotal)}</div><div class="g">${gp('今日', g1.length ? g1.reduce((a, b) => a + b, 0) : null)}${gp('近 7 天', g7.length ? g7.reduce((a, b) => a + b, 0) : null)}${gp('近 30 天', g30.length ? g30.reduce((a, b) => a + b, 0) : null)}</div></div>
       <div class="ph" style="margin:10px 0 2px"><h3 style="font-size:12.5px;color:var(--t2);font-weight:500">每日净增 · 近 30 天</h3><span class="note">${FANP.filter(p => gainN(p, 2) != null).map(p => `<i class="sw" style="width:8px;height:8px;margin:0 5px 0 10px;background:var(--p-${p})"></i>${PN[p]}`).join('')}</span></div>
       <div class="pb chart" id="c-fans"></div>
-      <div class="cap">${noHist.length ? `${noHist.map(p => PN[p]).join('、')}后台不给历史，从今天开始记；涨跌只统计${cover7.map(p => PN[p]).join('、') || '有历史的平台'}` : '全部平台都有记录'}</div></div>
+      <div class="cap">${noHist.length ? `${noHist.map(p => PN[p]).join('、')}后台不给历史，从今天开始记；涨跌只统计${cover7.map(p => PN[p]).join('、') || '有历史的平台'}` : '全部平台都有记录'}</div>
+      ${O.analytics && O.analytics.impressions != null ? `<div class="cap">总曝光 ${fmt(O.analytics.impressions)} · 主页访问 ${fmt(O.analytics.profileVisits)} · 链接点击 ${fmt(O.analytics.linkClicks)}</div>` : ''}</div>
     <div class="panel"><div class="ph"><h3>数据分析</h3><span class="note">基于本工作台已获取记录</span></div><div class="pb ins">${insights(cur, ref)}</div></div>
   </div>
 

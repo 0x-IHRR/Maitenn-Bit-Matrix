@@ -59,7 +59,8 @@ export class CollectionQueue {
         account=this.store.account(id);
         const discover=!task.postIds && !['followers','doctor','verify'].includes(task.kind);
         const timelineLimit=discover ? Number(account && this.store.settings().timelineLimit || 20) : 0;
-        const result=await this.collector({...account,posts:task.postIds?account.posts.filter(p=>task.postIds.includes(p.id)):account.posts,action:task.kind,timelineLimit},this.bitFactory());
+        const readAnalytics=account.group!=='benchmark' && account.platform==='x' && !['doctor','verify'].includes(task.kind);
+        const result=await this.collector({...account,posts:task.postIds?account.posts.filter(p=>task.postIds.includes(p.id)):account.posts,action:task.kind,timelineLimit,readAnalytics},this.bitFactory());
         const current=this.store.account(id);
         if (!current?.active || slotOf(current)!==task.profileId) throw new Error('采集中绑定发生变化，结果已丢弃');
         if (identityOf(account.platform,result.identity)!==account.identity) throw Object.assign(new Error('登录账号不符，请确认或更换绑定'),{code:'mismatch'});
