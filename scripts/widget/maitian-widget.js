@@ -100,12 +100,7 @@ function fansBlock(st, size, onDark) {
   text(r, '今日 ', 11, onDark ? C.white70 : C.dim, 'medium'); text(r, sign(data.fans.today), 12, deltaColor(data.fans.today, onDark));
   r.addSpacer(7); text(r, '7天 ', 11, onDark ? C.white70 : C.dim, 'medium'); text(r, sign(data.fans.week), 12, deltaColor(data.fans.week, onDark));
 }
-function siteRows(st) {
-  const s = data.site; if (!s) return;
-  text(st, `${s.name} · 近 7 天`, 10.5, C.dim, 'medium'); st.addSpacer(2);
-  const r = st.addStack(); r.centerAlignContent();
-  text(r, `注册 ${fmt(s.reg)}`, 12, C.ink); r.addSpacer(6); text(r, `会员 ${fmt(s.vip)}`, 12, C.ink); r.addSpacer(6); text(r, money(s.revenue), 12, C.gold);
-}
+function siteRows() {}
 function platformGrid(st, cols, size = 13, rows = 2) {
   // 最多 rows 行：平台多了只留粉丝最多的几个（顺序不变），总数里照样算全部
   let ps = data.platforms || [];
@@ -153,7 +148,7 @@ if (!data) {
   const b = s.addText(signShort(data.fans.today)); b.font = Font.heavyRoundedSystemFont(16); b.minimumScaleFactor = 0.5; b.centerAlignText();
   const a = s.addText('今日'); a.font = Font.mediumRoundedSystemFont(9); a.textOpacity = 0.75; a.centerAlignText();
 } else if (fam === 'accessoryRectangular') {
-  // 长条：粉丝（大）+ 今日；最新一期；站点 7 天
+  // 长条：粉丝（大）+ 今日；最新一期
   w.addAccessoryWidgetBackground = true; w.setPadding(4, 8, 4, 8);
   const l1 = w.addStack(); l1.centerAlignContent();
   const ic = l1.addImage(sym('leaf.fill', 13)); ic.imageSize = new Size(13, 13); l1.addSpacer(4);
@@ -163,13 +158,8 @@ if (!data) {
   if (data.latest) {
     const l2 = w.addStack(); l2.centerAlignContent();
     const i2 = l2.addImage(sym('play.rectangle.fill', 10)); i2.imageSize = new Size(11, 10); l2.addSpacer(4);
-    const h = data.latest.hours; const age = h == null ? '' : h < 1 ? ' · 刚发布' : h < 48 ? ` · ${h} 小时` : ` · ${Math.round(h / 24)} 天`;
+    const h = data.latest.hours; const age = h == null ? '' : h < 1 ? ' · 刚刚' : h < 48 ? ` · ${h} 小时` : ` · ${Math.round(h / 24)} 天`;
     const t2 = l2.addText(`${fmt(data.latest.views)} 播放${age}`); t2.font = Font.mediumRoundedSystemFont(12); t2.lineLimit = 1; t2.minimumScaleFactor = 0.7;
-  }
-  if (data.site) {
-    const l3 = w.addStack(); l3.centerAlignContent();
-    const i3 = l3.addImage(sym('yensign.circle.fill', 10)); i3.imageSize = new Size(10, 10); l3.addSpacer(4);
-    const t3 = l3.addText(`7天 ${money(data.site.revenue)} · 会员 ${fmt(data.site.vip)}`); t3.font = Font.mediumRoundedSystemFont(12); t3.lineLimit = 1; t3.minimumScaleFactor = 0.7;
   }
 } else if (fam === 'small') {
   w.backgroundGradient = bgGradient(); w.setPadding(13, 14, 13, 14);
@@ -177,7 +167,6 @@ if (!data) {
   const who = h.addStack(); who.layoutVertically(); text(who, data.owner || data.name || '麦田', 12); text(who, stale ? '⚠︎ 旧数据' : (data.owner ? data.name || '麦田' : ''), 10, stale ? C.down : C.dim, 'medium');
   w.addSpacer();
   fansBlock(w, 26);
-  if (data.site) { w.addSpacer(3); const r = w.addStack(); text(r, '7天 ', 10.5, C.dim, 'medium'); text(r, money(data.site.revenue), 11, C.gold); text(r, ` · 会员 ${fmt(data.site.vip)}`, 10.5, C.dim, 'medium'); }
 } else if (fam === 'medium') {
   w.backgroundGradient = bgGradient(); w.setPadding(13, 15, 13, 15);
   header(w); w.addSpacer(8);
@@ -200,7 +189,7 @@ if (!data) {
     const t = c.addText(data.latest.title); t.font = Font.boldRoundedSystemFont(13); t.textColor = C.ink; t.lineLimit = 2;
     c.addSpacer(4);
     const v = c.addStack(); v.centerAlignContent(); text(v, fmt(data.latest.views), 15, C.ink, 'heavy'); text(v, ' 播放', 11, C.dim, 'medium');
-    if (data.latest.hours != null) { v.addSpacer(6); text(v, data.latest.hours < 1 ? '刚发布' : data.latest.hours < 48 ? `${data.latest.hours} 小时` : `${Math.round(data.latest.hours / 24)} 天`, 10.5, C.dim, 'medium'); }
+    if (data.latest.hours != null) { v.addSpacer(6); text(v, data.latest.hours < 1 ? '刚刚' : data.latest.hours < 48 ? `${data.latest.hours} 小时` : `${Math.round(data.latest.hours / 24)} 天`, 10.5, C.dim, 'medium'); }
   }
   w.addSpacer(); siteRows(w);
 }

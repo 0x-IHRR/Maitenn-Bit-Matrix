@@ -157,7 +157,7 @@ summary .lg{--s:24px}summary b{width:70px;font-weight:600;flex:none}summary span
 .pl-row.off{opacity:.72}.st-chip.planned i{background:transparent;color:var(--t3)}
 .fnl{display:block;height:4px;border-radius:2px;background:var(--bg);margin-top:4px}.fnl i{display:block;height:100%;border-radius:2px}
 
-/* 集成卡片（飞书 / 知识站）：两卡同高；按钮与输入框留出间距 */
+/* 集成卡片（飞书 / Telegram）：两卡同高；按钮与输入框留出间距 */
 .sys-2col.sys-itg{align-items:stretch}
 .sys-2col.sys-itg .panel{height:100%}
 #site-body{flex:1;display:flex;flex-direction:column;min-height:0}

@@ -24,13 +24,9 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
   // Posts come from the profile timeline or a public/imported source.
   // Maitian publish.json is no longer read during collection.
   const wrapped = async (account, bit) => {
-    if ((account.group || 'owned') === 'benchmark') {
-      if (account.action === 'sync') throw new Error('对标账号不取发布链接');
-      return collectPublicAccount(account, { fetch });
-    }
-    const run = () => readAccount(account, bit);
-    if (account.action === 'sync') return run();
-    return withOwnedWindow(bit, account.profileId, run);
+    if (account.action === 'sync') throw new Error('取链接已移除，帖子由时间线采集');
+    if ((account.group || 'owned') === 'benchmark') return collectPublicAccount(account, { fetch });
+    return withOwnedWindow(bit, account.profileId, () => readAccount(account, bit));
   };
   const queue = new CollectionQueue(store, wrapped, bitFactory, 2, async () => {});
   const scheduler = new CollectionScheduler({ store, queue, ...schedulerOptions });

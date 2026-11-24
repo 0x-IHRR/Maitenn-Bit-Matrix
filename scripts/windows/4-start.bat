@@ -1,15 +1,7 @@
 @echo off
-set "ROOT=%MAITIAN_HOME%"
-if not defined ROOT set "ROOT=%USERPROFILE%\maitian"
-if not exist "%ROOT%\mdldm-maitian\src\hub.mjs" (
-  echo [STOP] Maitian is NOT installed yet - %ROOT% not found.
-  echo Please run install-windows.ps1 FIRST.
-  pause
-  exit /b 1
-)
-if not exist "%ROOT%\mdldm-maitian\data" mkdir "%ROOT%\mdldm-maitian\data"
-cd /d "%ROOT%\mdldm-maitian"
-echo Maitian daemon starting. Dashboard: http://localhost:8787/ - login key is web.key in config.json (the wizard showed it).
-echo Keep this window open - closing it stops Maitian.
-node src\hub.mjs daemon
+cd /d "%~dp0\..\.."
+echo 方正矩阵助手启动后打开 http://127.0.0.1:8790/
+echo 只读监控：不发帖、不点赞、不关注、不评论、不转发、不私信。
+echo 关掉这个窗口就会停止服务。
+npm start
 pause

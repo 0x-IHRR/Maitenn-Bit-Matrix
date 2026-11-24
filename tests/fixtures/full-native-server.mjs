@@ -10,7 +10,6 @@ process.env.MAITIAN_CONFIG=cfg;process.env.MAITIAN_DB=path.join(dir,'hub.db');
 const [{db,upsertEpisode,setTask,saveSnapshot},{Store},{createMatrixExtension},{startWeb},{readProjects}]=await Promise.all([
  import('../../src/db.mjs'),import('../../src/matrix/store.mjs'),import('../../src/matrix/web-extension.mjs'),import('../../src/web.mjs'),import('../../src/matrix/importer.mjs')
 ]);
-await import('../../src/followers.mjs');
 const pj={id:'legacy-one',episode:1,name:'原生验收作品',schedule:new Date().toISOString(),covers:{'3x4':'cover.svg','4x3':'cover.svg'},platforms:{x:{title:'原生验收作品',body:'测试文案',tags:['验收']}}};
 fs.writeFileSync(path.join(project,'publish.json'),JSON.stringify(pj));
 fs.writeFileSync(path.join(project,'发布记录.json'),JSON.stringify({updatedAt:new Date().toISOString(),platforms:{x:{state:'已发布',url:'https://x.com/first/status/111'}}}));
