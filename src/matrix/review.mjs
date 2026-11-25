@@ -113,7 +113,7 @@ export function healthIssues({ accounts = [], connectionError = '', now = Date.n
     else if (account.status === 'paused') issues.push({ level: 'bad', code: 'paused', accountId: account.id, text: `${name} 已暂停：${account.reason || '验证码或限流'}` });
     else if (account.status === 'failed') issues.push({ level: 'bad', code: 'failed', accountId: account.id, text: `${name} 采集失败：${account.reason || '没有拿到数据'}` });
     else if (account.status === 'offline') issues.push({ level: 'bad', code: 'offline', accountId: account.id, text: `${name} 的比特窗口没有运行` });
-    if (account.analyticsIssue?.text) issues.push({ level: 'warn', code: account.analyticsIssue.code || 'analytics', accountId: account.id, text: `${name} ${account.analyticsIssue.text}` });
+    if (account.analyticsIssue?.text) issues.push({ level: 'warn', code: account.analyticsIssue.code || 'analytics', accountId: account.id, text: `${name} ${account.analyticsIssue.code==='analytics-layout'?'上次采集未获取 X Analytics 指标，请确认账号访问权限':account.analyticsIssue.text}` });
     const last = Date.parse(account.lastSuccess || '');
     if (account.lastSuccess && Number.isFinite(last) && now - last > 48 * HOUR) issues.push({ level: 'warn', code: 'gap', accountId: account.id, text: `${name} 已超过 48 小时没有新的成功采集` });
   }

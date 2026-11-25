@@ -51,11 +51,11 @@ export class BitBrowser {
     await this.request('/browser/close', { id });
     return { id, closed: true };
   }
-  async endpoint(id) {
-    const running = await this.running();
+  async endpoint(id, snapshot = {}) {
+    const running = snapshot.running ?? await this.running();
     if (!running?.[id]) throw fault('offline', '环境未运行，请先点击打开环境');
     // BitBrowser 7.2.0 /browser/ports: { [profileId]: debuggingPort }. Read-only, never /browser/open.
-    const ports = await this.request('/browser/ports');
+    const ports = snapshot.ports ?? await this.request('/browser/ports');
     const port = Number(ports?.[id]);
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw fault('error', '当前比特版本未提供运行环境的调试端口');
     const version = await localJson(`http://127.0.0.1:${port}/json/version`);
@@ -63,8 +63,8 @@ export class BitBrowser {
     if (ws.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '[::1]'].includes(ws.hostname) || Number(ws.port) !== port) throw fault('error', '比特返回了不匹配的调试连接');
     return { port, ws: ws.href };
   }
-  async connect(id) {
-    return Cdp.connect((await this.endpoint(id)).ws);
+  async connect(id, snapshot) {
+    return Cdp.connect((await this.endpoint(id, snapshot)).ws);
   }
 }
 

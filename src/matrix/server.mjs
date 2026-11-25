@@ -12,6 +12,7 @@ import { isAbsolutePath } from './paths.mjs';
 import { CollectionScheduler, parseMonitorSettings, readMonitorSettings } from './schedule.mjs';
 import { withOwnedWindow } from './window.mjs';
 import { renderCsv, writeExport } from './export.mjs';
+import {detectAccounts, connectDetected} from './detect.mjs';
 
 export function accountAlerts(accounts) {
   return accounts.filter(account => account.enabled !== false && ['paused', 'mismatch', 'login', 'failed', 'offline'].includes(account.status))
@@ -32,7 +33,7 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
   const queue = new CollectionQueue(store, wrapped, bitFactory, 2, async () => {});
   const scheduler = new CollectionScheduler({ store, queue, ...schedulerOptions });
   scheduler.start();
-  let running = new Set(), connectionError='尚未检查比特接口';
+  let running = new Set(), connectionError='尚未检查比特接口', detecting=false;
   async function refreshRunning() {
     try {
       const result=await bitFactory().running();
@@ -78,7 +79,18 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
         if(req.method!=='POST') return send(404,{error:'接口不存在'});
         if(!req.headers['content-type']?.startsWith('application/json')) return send(415,{error:'需要 application/json'});
         const b=await body(req);
-        if(req.url==='/api/settings') {
+        if(detecting) throw new Error('正在检测账号，请稍后再操作');
+        if(req.url==='/api/detect') {
+          if(b.confirmed!==true) throw new Error('请确认检测并接入已打开的账号');
+          if(queue.active || queue.pending.length || scheduler.running) throw new Error('采集执行中，请完成后再检测接入');
+          detecting=true;
+          try {
+            const results=await detectAccounts(bitFactory());
+            if(queue.active || queue.pending.length || scheduler.running) throw new Error('采集已开始，本次检测结果未接入，请稍后重试');
+            return send(200,{results:connectDetected(store,results)});
+          }
+          finally {detecting=false;}
+        } else if(req.url==='/api/settings') {
           const next={};
           if(b.bitUrl!==undefined) {
             const u=new URL(b.bitUrl);

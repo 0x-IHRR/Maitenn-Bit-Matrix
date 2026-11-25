@@ -146,6 +146,10 @@ function loginLight(h) {
   if (none || ps.some(p => p.state !== 'ok')) return ['warn', '账号身份 未核验'];
   return ['ok', '账号身份 已核验'];
 }
+function healthLight(h) {
+  const issues=h.issues || [];
+  return issues.length ? `<a class="light ${issues.some(i=>i.level==='bad')?'bad':'warn'}" href="/p#/system">数据提醒 ${issues.length}</a>` : '';
+}
 function render() {
   const eps = O.episodes, h = O.health, scope = O.scope || {}, now = Date.now();
   const off = new Set((h.platforms || []).filter(p => p.disabled).map(p => p.id));
@@ -178,9 +182,9 @@ function render() {
   $('#screen').innerHTML = `
   <div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div>
     <div class="nav"><a class="on" href="/">大屏</a><a href="/p#/traffic">流量</a><a href="/p#/archive">档案</a><a href="/p#/system">系统</a></div>
-    <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span></div>
+    <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span>${healthLight(h)}</div>
     <div class="clock" id="clock"></div>
-    ${(h.issues || []).length ? `<div class="health-banner" role="alert">${(h.issues || []).map(issue => esc(issue.text)).join('<br>')}</div>` : ''}</div>
+  </div>
 
   <div class="r1">
     <div class="panel hero" id="hero">${hero}</div>
@@ -217,9 +221,10 @@ function tick() {
     cd.textContent = s == null ? '' : s > 0 ? (s > 86400 ? `记录 ${at}，还有 ${Math.floor(s / 86400)} 天 ${Math.floor(s % 86400 / 3600)} 小时 · ` : `记录 ${at}，还有 ${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)} · `) : -s < 3600 ? `${at} 起已过 ${Math.floor(-s / 60)} 分钟 · ` : -s < 172800 ? `${at} 起已过 ${Math.floor(-s / 3600)} 小时 · ` : `${at} 起已过 ${Math.floor(-s / 86400)} 天 · `;
   }
 }
+let rendered = false;
 async function load() {
-  try { const scope = document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix'; const r = await fetch('/api/overview'); if (!r.ok) throw new Error(r.status); const data = await r.json(); if (scope !== (document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix')) return; O = data; render(); }
-  catch (e) { if (!O) $('#screen').innerHTML = `<div class="empty">连不上本工作台服务（${esc(e.message)}）</div>`; else console.error(e); }
+  try { const scope = document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix'; const r = await fetch('/api/overview'); if (!r.ok) throw new Error(r.status); const data = await r.json(); if (scope !== (document.cookie.match(/(?:^|; )bt_profile=([^;]*)/)?.[1] || 'matrix')) return; O = data; render(); rendered = true; }
+  catch (e) { if (!rendered) $('#screen').innerHTML = `<div class="empty">页面加载失败（${esc(e.message)}），请刷新重试。</div>`; else console.error(e); }
 }
 const tip = $('#tip');
 document.addEventListener('mousemove', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (!t) { tip.style.display = 'none'; return; } tip.textContent = t.dataset.tip; tip.style.display = 'block'; const w = tip.offsetWidth; tip.style.left = Math.min(innerWidth - w - 8, e.clientX + 14) + 'px'; tip.style.top = Math.max(8, e.clientY - 34) + 'px'; });

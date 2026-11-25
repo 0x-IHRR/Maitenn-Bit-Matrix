@@ -166,3 +166,27 @@ test('Analytics 不增加每天的采集次数，对标号不读后台', async (
   assert.equal(seen.filter(item => item.id === 'owned').length, 2);
   store.close();
 });
+
+test('真实 Plus 升级提示不再误报改版；有指标时订阅推广文字不覆盖数据',async()=>{
+ const paywall='Advanced analytics with Plus\nSee your profile analytics, understand your audience and more. Upgrade to continue.\nUpgrade\nMaybe later';
+ const doc={body:{innerText:paywall},querySelector:s=>s.includes('AppTabBar_Profile_Link')?{getAttribute:()=>'/owned'}:null,querySelectorAll:()=>[]};
+ const raw=await vm.runInNewContext(accountAnalyticsExpression(),{document:doc,location:{pathname:'/i/account_analytics',href:'https://x.com/i/account_analytics'},performance:{getEntriesByType:()=>[]},URL,fetch(){throw new Error('订阅拦截时不能重放接口')}});
+ assert.equal(raw.permission,true);assert.equal(raw.ready,true);
+ const result=parseAccountAnalytics(raw);assert.equal(result.issue.code,'analytics-denied');assert.match(result.issue.text,/升级订阅/);
+ const valid=parseAccountAnalytics({text:paywall,numbers:{impressions:'0'}});assert.equal(valid.analytics.impressions,0);assert.equal(valid.issue,null);
+});
+
+test('只有侧栏文字时不提前认定Analytics页面已加载',async()=>{
+ const raw=await vm.runInNewContext(accountAnalyticsExpression(),{document:{body:{innerText:'Navigation menu '.repeat(30)},querySelector:()=>null,querySelectorAll:()=>[]},location:{pathname:'/i/account_analytics',href:'https://x.com/i/account_analytics'},performance:{getEntriesByType:()=>[]},URL});
+ assert.equal(raw.ready,false);assert.equal(raw.permission,false);
+});
+
+test('数据提醒复用原生组件：普通缺口不报红、真实失败展开、内容转义',async()=>{
+ const {readFile}=await import('node:fs/promises');const source=await readFile(new URL('../src/web/mt.js',import.meta.url),'utf8');
+ const helper=source.slice(source.indexOf('function healthLight('),source.indexOf('function topbar('));
+ const c=vm.createContext({esc:s=>String(s).replaceAll('<','&lt;').replaceAll('>','&gt;')});vm.runInContext(helper,c);
+ c.h={issues:[{level:'warn',text:'<后台未获取>'}]};
+ assert.match(vm.runInContext('healthLight(h)',c),/light warn/);
+ const warn=vm.runInContext('healthNotices(h)',c);assert.match(warn,/class="panel"/);assert.match(warn,/awaiting_user/);assert.match(warn,/&lt;后台未获取&gt;/);assert.doesNotMatch(warn,/role="alert"|<details open/);
+ c.h={issues:[{level:'bad',text:'需要登录'}]};assert.match(vm.runInContext('healthNotices(h)',c),/<details open[\s\S]*role="alert"/);
+});

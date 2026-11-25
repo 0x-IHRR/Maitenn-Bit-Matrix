@@ -103,6 +103,9 @@ export function parseAccountAnalytics(raw = {}) {
     followerTrend: fromPage.followerTrend.length ? fromPage.followerTrend : (fromJson.followerTrend || []),
   };
   const hasMetric = ['impressions', 'engagementRate', 'profileVisits', 'linkClicks'].some(key => analytics[key] != null) || analytics.followerTrend.length > 0;
+  if (!hasMetric && /advanced analytics with plus|upgrade to continue|升级.{0,12}(?:继续|分析)/i.test(text)) {
+    return { analytics: null, issue: { code: 'analytics-denied', text: 'X Analytics 要求升级订阅，未获取后台指标；粉丝和帖子可正常采集' } };
+  }
   if (!hasMetric && (raw.permission || /没有.{0,24}权限|无权|无法查看分析|analytics isn.?t available|not available for this account|upgrade to premium|需要\s*premium/i.test(text))) {
     return { analytics: null, issue: { code: 'analytics-denied', text: '没有 X Analytics 权限，已跳过后台指标' } };
   }
@@ -167,7 +170,7 @@ function pageProbe(kind) {
         if (day && value) trend.push({ day, value });
         if (trend.length >= 30) break;
       }
-      const permission = /没有权限|无权访问|无法查看分析|analytics isn.?t available|not available for this account|upgrade to premium|需要\\s*premium/i.test(text);
+      const permission = /没有权限|无权访问|无法查看分析|analytics isn.?t available|not available for this account|upgrade to premium|advanced analytics with plus|upgrade to continue|升级.{0,12}(?:继续|分析)|需要\\s*premium/i.test(text);
       const missing = !numbers.impressions && !numbers.profileVisits && !numbers.linkClicks && !trend.length;
       let bodies = [];
       if (missing && !risk && !login && !permission) {
@@ -185,7 +188,7 @@ function pageProbe(kind) {
           if (body.length <= 200000) bodies.push(body);
         }
       }
-      const ready = !!(risk || login || permission || numbers.impressions || numbers.profileVisits || numbers.linkClicks || trend.length || bodies.length || text.length > 240);
+      const ready = !!(risk || login || permission || numbers.impressions || numbers.engagementRate || numbers.profileVisits || numbers.linkClicks || trend.length || bodies.length);
       return { kind: ${JSON.stringify(kind)}, identity, risk, login, permission, numbers, trend, text: text.slice(0, 4000), bodies, ready, url: location.href };
     } catch (error) {
       return { layout: true, ready: true, text: '', error: String(error && error.message || error).slice(0, 180), url: location.href };

@@ -28,14 +28,25 @@ function loginLight(h) {
   return ['ok', '账号身份 已核验'];
 }
 const platformSummary = (h) => loginLight(h)[1].replace(/^账号身份 /, '');
+function healthLight(h) {
+  const issues=h.issues || [];
+  return issues.length ? `<a class="light ${issues.some(i=>i.level==='bad')?'bad':'warn'}" href="/p#/system">数据提醒 ${issues.length}</a>` : '';
+}
+function healthNotices(h) {
+  const issues=h.issues || [];
+  if (!issues.length) return '';
+  return `<div class="panel" id="data-notices"><div class="ph"><h3>数据提醒</h3><span class="note">基础数据与后台指标分别记录</span></div>${[['bad','需处理','failed'],['warn','部分数据','awaiting_user']].map(([level,label,chip])=>{
+    const rows=issues.filter(i=>i.level===level);
+    return rows.length ? `<details ${level==='bad'?'open':''}><summary><b>${label}</b><span>${rows.length} 项</span></summary>${rows.map(issue=>`<div class="prow" role="${level==='bad'?'alert':'status'}"><span class="st-chip ${chip}"><i>${level==='bad'?'!':'i'}</i>${level==='bad'?'待处理':'提示'}</span><span>${esc(issue.text)}</span></div>`).join('')}</details>` : '';
+  }).join('')}</div>`;
+}
 function topbar(O, on) {
   const h = O.health, scope = O.scope || {}, n = new Date(), [lc, lt] = loginLight(h);
   const nav = [['/', '大屏', 'board'], ['/p#/traffic', '流量', 'traffic'], ['/p#/archive', '档案', 'archive'], ['/p#/system', '系统', 'system']];
-  const issues = h.issues || [];
   return `<div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div><div class="nav">${nav.map(([u, t, k]) => `<a class="${k === on ? 'on' : ''}" href="${u}">${t}</a>`).join('')}</div>
-    <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span></div>
+    <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span>${healthLight(h)}</div>
     <div class="clock"><small>${n.getMonth() + 1}/${n.getDate()} 周${'日一二三四五六'[n.getDay()]}</small>${pad(n.getHours())}:${pad(n.getMinutes())}</div>
-    ${issues.length ? `<div class="health-banner" role="alert">${issues.map(issue => esc(issue.text)).join('<br>')}</div>` : ''}</div>`;
+    </div>`;
 }
 function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(Math.max(v, 1)))); const m = v / p; return (m <= 1 ? 1 : m <= 1.5 ? 1.5 : m <= 2 ? 2 : m <= 3 ? 3 : m <= 4 ? 4 : m <= 5 ? 5 : m <= 7.5 ? 7.5 : 10) * p; }
 // 按天的柱图；最后 7 根更亮

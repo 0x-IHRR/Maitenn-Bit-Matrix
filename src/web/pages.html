@@ -158,7 +158,7 @@ function vSystem() {
   const h = O.health, scope = O.scope || {}, ps = (h.platforms || []).filter(p => p.id === 'x' && !p.disabled);
   const stOf = (p) => p.disabled ? ['off', '–', '已停用'] : p.state === 'ok' ? ['published', '✓', '已登录'] : p.state === 'out' ? ['not_logged_in', '✕', '未登录'] : ['idle', '?', '未检查'];
   return `<div class="h1">系统</div><p class="lead">本工作台的比特环境、自有号与对标号。定时采集默认每天 1 次，最多 2 次；也可以手动更新。</p>
-  ${(h.issues || []).length ? `<div class="health-banner" role="alert">${h.issues.map(issue => esc(issue.text)).join('<br>')}</div>` : ''}
+  ${healthNotices(h)}
   <div class="grid g4">${tile('比特接口', scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查', esc(scope.connectionError || '本机 Local API'))}${tile('纳管 Profile', fmt(scope.profileCount), `${fmt(scope.runningCount)} 个运行中`)}${tile('账号身份', platformSummary(h), '写入数据前核验实际登录账号')}${tile('数据更新', '手动触发', `最后成功获取 ${when(scope.lastSuccess) || '尚未获取'}`)}</div>
   ${sec('只读采集', '检查登录态并读取粉丝、帖子。不打开发布页，不点赞、关注、评论或转发。')}
   <div class="panel"><div class="btns" style="margin-bottom:4px">${abtn({ type: 'doctor' }, '全部检查', 'pri')}${abtn({ type: 'metrics' }, '采流量')}${abtn({ type: 'followers' }, '采粉丝')}</div>

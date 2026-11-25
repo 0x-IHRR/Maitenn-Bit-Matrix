@@ -155,10 +155,10 @@ async function readXAnalytics(cdp, pages, owned, expected, posts) {
   const postAnalytics = [];
   const poll = async (page, script) => {
     let raw;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 24; i++) {
       raw = await cdp.evaluate(page, script);
       if (raw?.risk || raw?.login || raw?.ready) break;
-      await new Promise(resolve => setTimeout(resolve, 400));
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     return raw || {};
   };
