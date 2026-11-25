@@ -28,7 +28,7 @@
     if (!top || top.querySelector('#bt-scope')) return;
     const label = document.createElement('label'); label.className='bt-scope';label.textContent='查看范围 ';
     const select = document.createElement('select');select.id='bt-scope';select.setAttribute('aria-label','查看账号与环境范围');
-    select.innerHTML = '<option value="matrix">X 矩阵总览</option>' + state.profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name || p.id)}</option>`).join('') + state.accounts.filter(a=>a.active===false).map(a=>`<option value="${esc('history:'+a.id)}">${esc(a.identity)}（历史账号）</option>`).join('');
+    select.innerHTML = '<option value="matrix">X 矩阵总览</option>' + state.profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name || p.id)}</option>`).join('') + state.accounts.filter(a=>a.group==='benchmark' && a.active!==false).map(a=>`<option value="${esc('history:'+a.id)}">@${esc(a.identity)}（对标）</option>`).join('') + state.accounts.filter(a=>a.active===false).map(a=>`<option value="${esc('history:'+a.id)}">${esc(a.identity)}（历史账号）</option>`).join('');
     if (![...select.options].some(o=>o.value===initialScope)) select.add(new Option('当前范围不可用',initialScope));
     select.value=initialScope;label.append(select);(top.querySelector('.nav') || top.firstElementChild).after(label);
     select.addEventListener('change',()=>{

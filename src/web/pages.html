@@ -201,7 +201,7 @@ async function render() {
   dispatchEvent(new Event('maitian:before-render'));
   captureFsDraft(); captureTgDraft();
   const h = location.hash || '#/traffic', key = h.startsWith('#/ep/') ? 'archive' : h.slice(2).split('/')[0], app = $('#app'); after = () => {};
-  let body; try { body = h.startsWith('#/ep/') ? await vEpisode(decodeURIComponent(h.slice(5))) : ({ traffic: vTraffic, archive: vArchive, system: vSystem, personas: () => Editorial.personas(O), calendar: () => Editorial.calendar(O), approval: () => Editorial.approval(O) }[key] || vTraffic)(); } catch (e) { body = `<div class="empty" style="height:40vh">出错了：${esc(e.message)}</div>`; }
+  let body; try { body = h.startsWith('#/ep/') ? await vEpisode(decodeURIComponent(h.slice(5))) : ({ traffic: vTraffic, archive: vArchive, system: vSystem, matrix: () => { after = () => Editorial.drawMatrix(O); return Editorial.matrix(O); }, personas: () => Editorial.personas(O), calendar: () => Editorial.calendar(O), approval: () => Editorial.approval(O) }[key] || vTraffic)(); } catch (e) { body = `<div class="empty" style="height:40vh">出错了：${esc(e.message)}</div>`; }
   app.innerHTML = topbar(O, key) + body; after(); dispatchEvent(new Event('maitian:render'));
   if (fsDraft != null) { const wh = $('#fs-webhook'); if (wh) wh.value = fsDraft; }
 }
