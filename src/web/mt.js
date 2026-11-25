@@ -42,7 +42,7 @@ function healthNotices(h) {
 }
 function topbar(O, on) {
   const h = O.health, scope = O.scope || {}, n = new Date(), [lc, lt] = loginLight(h);
-  const nav = [['/', '大屏', 'board'], ['/p#/traffic', '流量', 'traffic'], ['/p#/archive', '档案', 'archive'], ['/p#/system', '系统', 'system']];
+  const nav = [['/', '大屏', 'board'], ['/p#/traffic', '流量', 'traffic'], ['/p#/archive', '档案', 'archive'], ['/p#/personas', '人设', 'personas'], ['/p#/calendar', '日历', 'calendar'], ['/p#/approval', '审批', 'approval'], ['/p#/system', '系统', 'system']];
   return `<div class="top"><a class="logo" href="/">比特媒体矩阵</a><div class="tag">本地账号工作台</div><div class="nav">${nav.map(([u, t, k]) => `<a class="${k === on ? 'on' : ''}" href="${u}">${t}</a>`).join('')}</div>
     <div class="lights"><span class="light ${scope.connectionError ? 'bad' : scope.connectionError === '' ? 'ok' : 'warn'}">比特接口 ${scope.connectionError ? '异常' : scope.connectionError === '' ? '已连接' : '未检查'}</span><span class="light ${scope.runningCount ? 'ok' : 'warn'}">Profile ${fmt(scope.runningCount)} / ${fmt(scope.profileCount)} 运行</span><span class="light ${lc}">${lt}</span>${healthLight(h)}</div>
     <div class="clock"><small>${n.getMonth() + 1}/${n.getDate()} 周${'日一二三四五六'[n.getDay()]}</small>${pad(n.getHours())}:${pad(n.getMinutes())}</div>

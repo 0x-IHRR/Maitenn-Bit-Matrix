@@ -20,6 +20,7 @@
 <div class="bgfx"><i></i><i></i><i></i></div>
 <div class="page" id="app"><div class="empty" style="height:60vh">加载中…</div></div>
 <script src="/static/mt.js"></script>
+<script src="/static/editorial.js"></script>
 <script>
 let O = null, I = null, F = {}, timer = null, pick = null;
 const toasted = new Set();
@@ -106,7 +107,7 @@ function vArchive() {
   if (!O.episodes.length) return `<div class="h1">档案</div><p class="lead">还没有登记的期数。</p>`;
   return `<div class="h1">档案</div><p class="lead">已采集的作品、播放和复盘。</p>
   <div class="wall">${O.episodes.map(e => `<a class="panel poster" href="#/ep/${encodeURIComponent(e.id)}"><div class="im" style="${e.covers.length ? `background-image:url('/cover?id=${encodeURIComponent(e.id)}&k=${e.covers.includes('4x3') ? '4x3' : e.covers[0]}')` : ''}"></div>
-    <div class="tx"><div class="ep">${[epNo(e), when(e.schedule || e.createdAt)].filter(Boolean).join(' · ')}</div><h3>${esc(e.name)}</h3><div class="mt"><span class="gpill">${e.views != null ? fmt(e.views) + ' 播放' : '还没有播放数据'}</span><span class="gpill">${e.tasks.filter(t => t.m).length}/${e.tasks.length} 已采集</span></div></div></a>`).join('')}</div>`;
+    <div class="tx"><div class="ep">${[e.personaName, epNo(e), when(e.schedule || e.createdAt)].filter(Boolean).join(' · ')}</div><h3>${esc(e.name)}</h3><div class="mt"><span class="gpill">${e.views != null ? fmt(e.views) + ' 播放' : '还没有播放数据'}</span><span class="gpill">${e.tasks.filter(t => t.m).length}/${e.tasks.length} 已采集</span></div></div></a>`).join('')}</div>`;
 }
 
 async function vEpisode(id) {
@@ -116,7 +117,7 @@ async function vEpisode(id) {
   <div class="panel ephero">${e.covers.length ? `<img src="/cover?id=${encodeURIComponent(e.id)}&k=${e.covers.includes('4x3') ? '4x3' : e.covers[0]}" alt="">` : '<div></div>'}
     <div><div class="eyebrow">${epNo(e) || '作品'}</div><div class="h1" style="margin:6px 0">${esc(t1)}</div>${t2 ? `<p class="lead" style="margin:0 0 14px">${esc(t2)}</p>` : ''}
       <div style="display:flex;gap:34px;flex-wrap:wrap;margin:6px 0 16px"><div><div class="lab" style="font-size:12px;color:var(--t3)">全平台播放</div><div class="val">${e.views != null ? fmt(e.views) : '–'}</div></div><div><div style="font-size:12px;color:var(--t3)">互动</div><div class="val">${e.inter != null ? fmt(e.inter) : '–'}</div></div><div><div style="font-size:12px;color:var(--t3)">互动率</div><div class="val">${e.views > 1 ? pct(e.inter, e.views, 1) : '–'}</div></div><div><div style="font-size:12px;color:var(--t3)">已采集</div><div class="val">${e.tasks.filter(t => t.m).length}/${e.tasks.length}</div></div></div>
-      <dl class="kv"><dt>记录时间</dt><dd>${e.schedule ? when(e.schedule) : (e.createdAt ? when(e.createdAt) : '未记录')}</dd>${e.durationSec ? `<dt>时长</dt><dd>${Math.floor(e.durationSec / 60)} 分 ${Math.round(e.durationSec % 60)} 秒</dd>` : ''}${e.campaign ? `<dt>链接标记</dt><dd>${esc(e.campaign)}</dd>` : ''}<dt>关联文件</dt><dd>${e.files.length ? e.files.map(esc).join('、') : '没有关联工程'}</dd></dl>
+      <dl class="kv"><dt>记录时间</dt><dd>${e.schedule ? when(e.schedule) : (e.createdAt ? when(e.createdAt) : '未记录')}</dd>${e.personaName ? `<dt>人设</dt><dd>${esc(e.personaName)}</dd>` : ''}${e.durationSec ? `<dt>时长</dt><dd>${Math.floor(e.durationSec / 60)} 分 ${Math.round(e.durationSec % 60)} 秒</dd>` : ''}${e.campaign ? `<dt>链接标记</dt><dd>${esc(e.campaign)}</dd>` : ''}<dt>关联文件</dt><dd>${e.files.length ? e.files.map(esc).join('、') : '没有关联工程'}</dd></dl>
       <div class="btns" style="margin-top:16px">${abtn({ type: 'metrics', id: e.id }, '采这一期的流量', 'pri')}</div></div></div>
   ${e.accountAnalytics || e.tasks.some(t => t.analytics) ? `${sec('Analytics 明细', '后台曝光和互动，不替代时间线上的公开播放')}<div class="panel"><div class="tw"><table><thead><tr><th>范围</th><th class="n">曝光</th><th class="n">互动率</th><th class="n">主页访问</th><th class="n">链接点击</th><th>新增粉丝</th></tr></thead><tbody>
     ${e.accountAnalytics ? `<tr><td>账号</td><td class="n">${fmt(e.accountAnalytics.impressions)}</td><td class="n">${e.accountAnalytics.engagementRate == null ? '–' : e.accountAnalytics.engagementRate + '%'}</td><td class="n">${fmt(e.accountAnalytics.profileVisits)}</td><td class="n">${fmt(e.accountAnalytics.linkClicks)}</td><td>${(e.accountAnalytics.followerTrend || []).slice(-3).map(point => `${esc(point.day)} +${fmt(point.value)}`).join(' · ') || '–'}</td></tr>` : ''}
@@ -200,7 +201,7 @@ async function render() {
   dispatchEvent(new Event('maitian:before-render'));
   captureFsDraft(); captureTgDraft();
   const h = location.hash || '#/traffic', key = h.startsWith('#/ep/') ? 'archive' : h.slice(2).split('/')[0], app = $('#app'); after = () => {};
-  let body; try { body = h.startsWith('#/ep/') ? await vEpisode(decodeURIComponent(h.slice(5))) : ({ traffic: vTraffic, archive: vArchive, system: vSystem }[key] || vTraffic)(); } catch (e) { body = `<div class="empty" style="height:40vh">出错了：${esc(e.message)}</div>`; }
+  let body; try { body = h.startsWith('#/ep/') ? await vEpisode(decodeURIComponent(h.slice(5))) : ({ traffic: vTraffic, archive: vArchive, system: vSystem, personas: () => Editorial.personas(O), calendar: () => Editorial.calendar(O), approval: () => Editorial.approval(O) }[key] || vTraffic)(); } catch (e) { body = `<div class="empty" style="height:40vh">出错了：${esc(e.message)}</div>`; }
   app.innerHTML = topbar(O, key) + body; after(); dispatchEvent(new Event('maitian:render'));
   if (fsDraft != null) { const wh = $('#fs-webhook'); if (wh) wh.value = fsDraft; }
 }
@@ -261,6 +262,7 @@ document.addEventListener('change', async (e) => {
   }
 });
 addEventListener('hashchange', () => { render(); scrollTo(0, 0); });
+addEventListener('editorial:reload', () => load());
 addEventListener('resize', () => after());
 load(); setInterval(() => { if (!timer && !document.hidden && !document.querySelector('details[open]')) load(); }, 60000);
 </script>

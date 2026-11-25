@@ -1,0 +1,194 @@
+// 人设、内容日历、审批。只改本地记录，不打开撰写页，不调用比特开窗。
+(() => {
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const LABELS = { draft: '草稿', pending: '待批准', approved: '已批准', published: '已发布' };
+  const CHIPS = { draft: 'planned', pending: 'filled', approved: 'scheduled', published: 'published' };
+  const CAL = { draft: 'plan', pending: 'todo', approved: 'sch', published: 'ok' };
+  const readOnly = () => String(window.MaitianProfileScope?.scope || '').startsWith('history:');
+  const sec = (title, note = '') => `<div class="sec"><h2>${esc(title)}</h2><span class="note">${note}</span></div>`;
+  const field = (label, input) => `<div><label class="lab">${esc(label)}</label>${input}</div>`;
+  const personaName = (O, id) => (O.personas || []).find(p => p.id === id)?.name || '';
+  const accountLabel = account => account ? `@${account.identity}${account.displayName ? ' · ' + account.displayName : ''}` : '';
+  const rosterOf = O => O.roster || [];
+  const accountById = (O, id) => rosterOf(O).find(account => account.id === id);
+
+  function accountOptions(O, selected) {
+    return `<option value="">暂不绑定</option>${rosterOf(O).map(account => `<option value="${esc(account.id)}"${account.id === selected ? ' selected' : ''}>${esc(accountLabel(account))} · ${account.group === 'benchmark' ? '对标' : '自有'}${account.active === false ? ' · 历史' : ''}</option>`).join('')}`;
+  }
+  function personaOptions(O, selected) {
+    return `<option value="">不指定人设</option>${(O.personas || []).map(persona => `<option value="${esc(persona.id)}"${persona.id === selected ? ' selected' : ''}>${esc(persona.name)}</option>`).join('')}`;
+  }
+  function columnFields(column = {}) {
+    return `<div class="grid2" data-column>${field('栏目名', `<input class="inp" name="columnName" value="${esc(column.name || '')}" placeholder="栏目名">`)}${field('建议频率', `<input class="inp" name="columnFrequency" value="${esc(column.frequency || '')}" placeholder="例如每周 3 次">`)}${field('目的', `<input class="inp" name="columnPurpose" value="${esc(column.purpose || '')}">`)}${field('例子', `<input class="inp" name="columnExamples" value="${esc(column.examples || '')}">`)}</div>`;
+  }
+  function personaForm(O, persona) {
+    const columns = persona?.columns?.length ? persona.columns : [{}];
+    return `<form data-persona-form="${esc(persona?.id || '')}">${persona ? '' : '<div class="ph"><h3>新建人设</h3><span class="note">先不绑定也可以</span></div>'}
+      <div class="grid2">${field('显示名', `<input class="inp" name="name" value="${esc(persona?.name || '')}" required>`)}${field('绑定账号', `<select class="inp" name="accountId">${accountOptions(O, persona?.accountId || '')}</select>`)}${field('一句话定位', `<input class="inp" name="positioning" value="${esc(persona?.positioning || '')}">`)}${field('语气', `<input class="inp" name="tone" value="${esc(persona?.tone || '')}">`)}${field('禁忌', `<input class="inp" name="taboos" value="${esc(persona?.taboos || '')}">`)}${field('目标读者', `<input class="inp" name="audience" value="${esc(persona?.audience || '')}">`)}</div>
+      <div class="fine">栏目</div><div data-columns>${columns.map(columnFields).join('')}</div>
+      <div class="btns"><button class="btn" type="button" data-ed="add-column">添加栏目</button><button class="btn pri" type="submit">${persona ? '保存人设' : '创建人设'}</button>${persona ? `<button class="btn" type="button" data-ed="delete-persona" data-id="${esc(persona.id)}">删除人设</button>` : ''}</div>
+      ${persona ? `<div class="fine">来源 ${persona.source === 'import' ? '导入' : '手工'}${persona.sourceLabel ? ' · ' + esc(persona.sourceLabel) : ''}</div>` : ''}</form>`;
+  }
+
+  function personas(O) {
+    const list = O.personas || [];
+    const locked = readOnly() ? '<p class="fine">历史账号只读，人设不能在这里修改。</p>' : '';
+    return `<div class="h1">人设</div><p class="lead">人设和栏目可以导入或手改，再绑到已经接入的账号。有多少个账号就列多少个，没有人设的账号可以先空着。</p>${locked}
+      ${readOnly() ? '' : `<div class="sys-2col sys-itg"><div class="panel">${personaForm(O, null)}</div>
+        <div class="panel"><div class="ph"><h3>导入 JSON</h3><span class="note">通用结构，可扩展字段</span></div>
+          <form data-import-form><label class="lab">人设 JSON</label><textarea class="inp" name="document" rows="8" placeholder='{"personas":[{"name":"栏目号","positioning":"一句话","columns":[{"name":"早报","frequency":"每天"}]}]}'></textarea>
+          <div class="grid2">${field('或选择文件', '<input class="inp" name="file" type="file" accept="application/json,.json">')}${field('或本机绝对路径', '<input class="inp" name="path" placeholder="macOS /Users/… 或 Windows C:\\…">')}</div>
+          <div class="btns"><button class="btn pri" type="submit">导入人设</button></div>
+          <div class="fine">坏的 JSON 会整份拒绝。文件里的账号名只有在已经接入时才会绑定，不会新建账号。</div></form></div></div>`}
+      ${sec('已有人设', `${list.length} 张`)}
+      <div class="sys-2col sys-itg">${list.map(persona => {
+        const account = accountById(O, persona.accountId);
+        return `<div class="panel"><div class="ph"><h3>${esc(persona.name)}</h3><span class="note">${account ? esc(accountLabel(account)) : '暂未绑定账号'}</span></div>
+          <dl class="kv"><dt>定位</dt><dd>${esc(persona.positioning || '未写')}</dd><dt>语气</dt><dd>${esc(persona.tone || '未写')}</dd><dt>禁忌</dt><dd>${esc(persona.taboos || '未写')}</dd><dt>读者</dt><dd>${esc(persona.audience || '未写')}</dd></dl>
+          ${persona.columns?.length ? `<div class="fine">栏目</div>${persona.columns.map(column => `<div class="prow"><span><b>${esc(column.name)}</b>${column.frequency ? ' · ' + esc(column.frequency) : ''}</span><span class="d">${esc(column.purpose || column.examples || '')}</span></div>`).join('')}` : '<div class="fine">还没有栏目</div>'}
+          ${readOnly() ? '' : `<details><summary><b>编辑</b><span>字段、栏目和绑定</span></summary>${personaForm(O, persona)}</details>`}</div>`;
+      }).join('') || '<div class="panel"><div class="site-off">还没有人设。</div></div>'}</div>`;
+  }
+
+  function itemLine(item, O) {
+    const persona = personaName(O, item.personaId);
+    const account = accountById(O, item.accountId);
+    const who = [persona, account ? accountLabel(account) : ''].filter(Boolean).join(' · ') || '未指定账号';
+    return { who, persona, account };
+  }
+  function calendar(O) {
+    const data = O.calendar || { days: [], unscheduledPosts: [], unscheduledItems: [] };
+    const head = '一二三四五六日'.split('').map(day => `<div>周${day}</div>`).join('');
+    const cells = (data.days || []).map(day => {
+      const date = day.key.slice(5).replace('-', '/');
+      const posts = (day.posts || []).map(post => `<a class="cal-e seen" href="#/ep/${encodeURIComponent(post.id)}"><div><b>${esc(post.personaName || (post.identity ? '@' + post.identity : '已采集'))}</b><span><i></i>${esc(post.title || '帖子')}</span></div></a>`).join('');
+      const items = (day.items || []).map(item => {
+        const line = itemLine(item, O);
+        return `<a class="cal-e ${CAL[item.status] || 'plan'}" href="#/approval"><div><b>${esc(line.who)}</b><span><i></i>${LABELS[item.status] || ''} · ${esc(item.title)}</span></div></a>`;
+      }).join('');
+      return `<div class="cal-d${day.today ? ' today' : ''}${day.past ? ' past' : ''}"><div class="cal-n">${date}${day.today ? '<span>今天</span>' : ''}</div>${posts}${items}</div>`;
+    }).join('');
+    const outside = (data.outsideItems || []).map(item => `<div class="prow"><span>${esc(itemLine(item, O).who)} · ${esc(item.title)}</span><span class="d">${esc(item.planDate || '')} · 不在这 28 天里</span></div>`).join('');
+    const loosePosts = (data.unscheduledPosts || []).map(post => `<div class="prow"><span>${esc(post.personaName || (post.identity ? '@' + post.identity : '已采集'))} · ${esc(post.title || '帖子')}</span><a href="#/ep/${encodeURIComponent(post.id)}">打开档案</a></div>`).join('');
+    const looseItems = (data.unscheduledItems || []).map(item => `<div class="prow"><span>${esc(itemLine(item, O).who)} · ${esc(item.title)}</span><span class="st-chip ${CHIPS[item.status] || 'planned'}"><i>○</i>${LABELS[item.status] || ''}</span></div>`).join('');
+    return `<div class="h1">日历</div><p class="lead">上周到未来两周。已采集的帖子按创建时间落格，只链到档案。计划按状态着色，格子里是账号或人设。没有创建时间或计划日的放在未排期。</p>
+      <div class="panel cal"><div class="cal-h">${head}</div><div class="cal-g">${cells}</div></div>
+      <div class="cal-lg"><span><i class="seen"></i>已采集</span><span><i class="plan"></i>草稿</span><span><i class="todo"></i>待批准</span><span><i class="sch"></i>已批准</span><span><i class="ok"></i>已记下已发布</span></div>
+      ${sec('未排期', '没有创建时间的帖子，或没有计划日的条目')}
+      <div class="panel">${loosePosts || looseItems || outside ? loosePosts + looseItems + outside : '<div class="site-off">没有未排期的内容。</div>'}</div>`;
+  }
+
+  function approval(O) {
+    const items = O.contentItems || [];
+    const locked = readOnly();
+    const groups = [['pending', '待批准', true], ['draft', '草稿', false], ['approved', '已批准', false], ['published', '已记下已发布', false]];
+    const card = item => {
+      const line = itemLine(item, O);
+      const matched = item.matched ? `<div class="fine">已对上采集记录${item.matched.views == null ? '，播放尚未获取' : `，播放 ${Number(item.matched.views).toLocaleString('zh-CN')}`} · <a href="#/ep/${encodeURIComponent(item.matched.postId)}">打开档案</a></div>` : (item.postUrl ? '<div class="fine">链接已记下，采集记录里还没有这条帖。</div>' : '');
+      let controls = '';
+      if (!locked && item.status === 'draft') controls = `<div class="btns"><button class="btn pri" type="button" data-ed="transition" data-id="${esc(item.id)}" data-action="submit">提交审批</button><button class="btn" type="button" data-ed="delete-item" data-id="${esc(item.id)}">删除草稿</button></div>`;
+      if (!locked && item.status === 'pending') controls = `<div class="btns"><button class="btn pri" type="button" data-ed="transition" data-id="${esc(item.id)}" data-action="approve">标记已批准</button></div>${field('退回原因', `<input class="inp" data-reason="${esc(item.id)}" placeholder="退回时必填">`)}<div class="btns"><button class="btn" type="button" data-ed="transition" data-id="${esc(item.id)}" data-action="return">退回草稿</button></div>`;
+      if (!locked && item.status === 'approved') controls = `${field('帖子链接（可选）', `<input class="inp" data-url="${esc(item.id)}" placeholder="https://x.com/用户名/status/数字">`)}<div class="btns"><button class="btn pri" type="button" data-ed="transition" data-id="${esc(item.id)}" data-action="mark">记为已发布</button></div>${field('退回原因', `<input class="inp" data-reason="${esc(item.id)}" placeholder="退回时必填">`)}<div class="btns"><button class="btn" type="button" data-ed="transition" data-id="${esc(item.id)}" data-action="return">退回草稿</button></div>`;
+      if (!locked && item.status === 'published') controls = `${item.postUrl ? `<div class="fine"><a href="${esc(item.postUrl)}" target="_blank" rel="noopener">${esc(item.postUrl)}</a></div>` : ''}${field('退回原因', `<input class="inp" data-reason="${esc(item.id)}" placeholder="退回时必填">`)}<div class="btns"><button class="btn" type="button" data-ed="transition" data-id="${esc(item.id)}" data-action="return">退回草稿</button></div>`;
+      return `<div class="prow" style="align-items:flex-start"><span><b>${esc(item.title)}</b><span class="d">${esc(line.who)}${item.columnName ? ' · ' + esc(item.columnName) : ''}${item.planDate ? ' · ' + esc(item.planDate) : ' · 未排期'}</span>${item.returnReason && item.status === 'draft' ? `<span class="d">退回：${esc(item.returnReason)}</span>` : ''}${matched}</span><span class="st-chip ${CHIPS[item.status] || 'planned'}"><i>○</i>${LABELS[item.status] || ''}</span></div>${controls}`;
+    };
+    const form = locked ? '' : `<div class="panel"><div class="ph"><h3>新的草稿</h3><span class="note">保存后仍是草稿</span></div><form data-item-form><div class="grid2">${field('标题', '<input class="inp" name="title" required>')}${field('人设', `<select class="inp" name="personaId">${personaOptions(O, '')}</select>`)}${field('账号', `<select class="inp" name="accountId">${accountOptions(O, '')}</select>`)}${field('栏目', '<input class="inp" name="columnName" placeholder="可从人设栏目里选一个名字">')}${field('计划日', '<input class="inp" name="planDate" type="date">')}${field('备注', '<input class="inp" name="note">')}</div><div class="btns"><button class="btn pri" type="submit">保存草稿</button></div><div class="fine">不指定账号时，会沿用人设已经绑定的账号。批准和记为已发布都只改这条记录，不会打开窗口或发帖。</div></form></div>`;
+    return `<div class="h1">审批</div><p class="lead">草稿提交后待批准，再由人标记已批准、记为已发布。可以退回并写原因。这里没有自动发出、定时或打开撰写页。</p>
+      ${locked ? '<p class="fine">历史账号只读。</p>' : ''}
+      ${form}
+      ${sec('条目', `${items.length} 条`)}
+      <div class="panel">${groups.map(([status, label, open]) => {
+        const rows = items.filter(item => item.status === status);
+        if (!rows.length) return '';
+        return `<details ${open ? 'open' : ''}><summary><b>${label}</b><span>${rows.length} 条</span></summary>${rows.map(card).join('')}</details>`;
+      }).join('') || '<div class="site-off">还没有内容条目。</div>'}</div>`;
+  }
+
+  async function post(url, body) {
+    const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || '没成功');
+    return data;
+  }
+  function columnsFrom(form) {
+    return [...form.querySelectorAll('[data-column]')].map(row => ({
+      name: row.querySelector('[name=columnName]')?.value || '',
+      purpose: row.querySelector('[name=columnPurpose]')?.value || '',
+      frequency: row.querySelector('[name=columnFrequency]')?.value || '',
+      examples: row.querySelector('[name=columnExamples]')?.value || '',
+    })).filter(column => column.name || column.purpose || column.frequency || column.examples);
+  }
+  function reload() { document.dispatchEvent(new Event('editorial:reload')); }
+  function note(message) { if (typeof window.toast === 'function') window.note(message); else window.alert(message); }
+
+  document.addEventListener('click', async event => {
+    const button = event.target.closest?.('[data-ed]');
+    if (!button) return;
+    if (button.dataset.ed === 'add-column') {
+      event.preventDefault();
+      button.closest('form')?.querySelector('[data-columns]')?.insertAdjacentHTML('beforeend', columnFields());
+      return;
+    }
+    if (readOnly()) { note('历史账号只读'); return; }
+    button.disabled = true;
+    try {
+      if (button.dataset.ed === 'delete-persona') {
+        if (!confirm('删除这张人设？已关联的草稿会保留，只是不再指向它。')) return;
+        await post('/api/bt/personas', { action: 'delete', id: button.dataset.id });
+      } else if (button.dataset.ed === 'delete-item') {
+        await post('/api/bt/items', { action: 'delete', id: button.dataset.id });
+      } else if (button.dataset.ed === 'transition') {
+        const id = button.dataset.id;
+        const reason = document.querySelector(`[data-reason="${CSS.escape(id)}"]`)?.value || '';
+        const postUrl = document.querySelector(`[data-url="${CSS.escape(id)}"]`)?.value || '';
+        await post('/api/bt/items/transition', { id, action: button.dataset.action, reason, postUrl });
+      }
+      reload();
+    } catch (error) { note(error.message); }
+    finally { button.disabled = false; }
+  });
+  document.addEventListener('change', async event => {
+    const input = event.target;
+    if (input?.name !== 'file' || !input.closest('[data-import-form]')) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    input.closest('form').querySelector('[name=document]').value = await file.text();
+  });
+  document.addEventListener('submit', async event => {
+    const form = event.target;
+    if (form.matches?.('[data-persona-form]')) {
+      event.preventDefault();
+      if (readOnly()) return;
+      const columns = columnsFrom(form);
+      if (columns.some(column => !column.name)) { note('栏目需要名称'); return; }
+      const value = name => form.querySelector(`[name="${name}"]`)?.value ?? '';
+      const body = { id: form.dataset.personaForm || undefined, name: value('name'), positioning: value('positioning'), tone: value('tone'), taboos: value('taboos'), audience: value('audience'), accountId: value('accountId') || null, columns };
+      try { await post('/api/bt/personas', body); reload(); }
+      catch (error) { note(error.message); }
+    } else if (form.matches?.('[data-import-form]')) {
+      event.preventDefault();
+      if (readOnly()) return;
+      const raw = (form.querySelector('[name=document]')?.value || '').trim();
+      const path = (form.querySelector('[name=path]')?.value || '').trim();
+      try {
+        if (raw) {
+          let document;
+          try { document = JSON.parse(raw); }
+          catch { throw new Error('人设 JSON 无法解析'); }
+          await post('/api/bt/personas/import', { document });
+        } else if (path) await post('/api/bt/personas/import', { path });
+        else throw new Error('没有人设内容');
+        reload();
+      } catch (error) { note(error.message); }
+    } else if (form.matches?.('[data-item-form]')) {
+      event.preventDefault();
+      if (readOnly()) return;
+      const value = name => form.querySelector(`[name="${name}"]`)?.value ?? '';
+      const body = { title: value('title'), personaId: value('personaId') || null, accountId: value('accountId') || null, columnName: value('columnName'), planDate: value('planDate') || null, note: value('note') };
+      try { await post('/api/bt/items', body); reload(); }
+      catch (error) { note(error.message); }
+    }
+  });
+
+  window.Editorial = { personas, calendar, approval };
+})();
