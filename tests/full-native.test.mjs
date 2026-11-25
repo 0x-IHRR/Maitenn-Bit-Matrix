@@ -11,7 +11,7 @@ test('完整麦田原生页面与比特范围共用服务，档案、封面和�
     const get=(url,scope='matrix')=>fetch(base+url,{headers:{cookie:'bt_profile='+scope}});
     const home=await(await get('/')).text(),pages=await(await get('/p')).text(),js=await(await get('/static/mt.js')).text();
     assert.match(home,/\/static\/bit-profiles.js/);assert.match(pages,/vTraffic/);assert.match(pages,/vArchive/);assert.match(pages,/vSystem/);assert.match(pages,/上周周报/);
-    for(const text of ['大屏','流量','档案','人设','日历','审批','系统'])assert.ok(js.includes(text),text);
+    for(const text of ['大屏','矩阵','流量','档案','人设','日历','审批','系统'])assert.ok(js.includes(text),text);
     for(const banned of ['知识站','我已发布','取链接','同步知识站','等你点发布','转化']) {
       assert.equal(home.includes(banned),false,banned);
       assert.equal(pages.includes(banned),false,banned);

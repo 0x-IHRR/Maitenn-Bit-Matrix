@@ -1,4 +1,5 @@
 import { buildCalendar } from './editorial.mjs';
+import { matrixRows } from './matrix-view.mjs';
 import { validMetric } from './store.mjs';
 import { healthIssues, reviewsForPost, weeklyReport } from './review.mjs';
 
@@ -73,7 +74,8 @@ export function nativeOverview(store, running, connectionError, profileId='') {
   samples.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
   const calendar=buildCalendar({posts:episodes.map(e=>({id:e.id,title:e.short||e.nick,createdAt:e.createdAt,personaName:e.personaName,identity:e.identity,accountId:e.accountId})),items:contentItems});
   const roster=allAccounts.filter(a=>a.platform==='x').map(a=>({id:a.id,identity:a.identity,displayName:a.displayName,group:a.group,active:a.active,profileId:a.profileId}));
-  return {name:'比特媒体矩阵',matrixReadOnly:!!historyId,episodes,followers,samples,analytics,personas:editorial.personas,contentItems,roster,calendar,actions:[],feed:[],siteOn:false,site:{days:[],channels:[],campaigns:[]},weekly:weeklyReport(accounts),
+  const matrix=matrixRows(allAccounts, editorial.personas);
+  return {name:'比特媒体矩阵',matrixReadOnly:!!historyId,episodes,followers,samples,analytics,personas:editorial.personas,contentItems,roster,matrix,calendar,actions:[],feed:[],siteOn:false,site:{days:[],channels:[],campaigns:[]},weekly:weeklyReport(accounts),
     health:{nas:false,chrome:profiles.some(p=>running.has(p.id)),issues,platforms:[{id:'x',disabled:false,state:paused?'out':allReady?'ok':'',reason:paused?'有账号需要处理':issues.find(issue=>issue.code==='bit')?.text||''}]},
     scope:{profiles,selectedProfileId:profileId,accountCount:accounts.length,availableAccountCount:accounts.filter(a=>validMetric(a.followers)).length,
       profileCount:profiles.length,runningCount:profiles.filter(p=>running.has(p.id)).length,

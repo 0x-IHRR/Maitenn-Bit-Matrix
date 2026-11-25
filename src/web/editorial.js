@@ -190,5 +190,68 @@
     }
   });
 
-  window.Editorial = { personas, calendar, approval };
+  function num(value, suffix = '') {
+    if (value == null) return '<span style="color:var(--t3)">未获取</span>';
+    return `${esc(Number(value).toLocaleString('zh-CN'))}${suffix}`;
+  }
+  function delta(value) {
+    if (value == null) return num(null);
+    return esc((value > 0 ? '+' : '') + Number(value).toLocaleString('zh-CN'));
+  }
+  function stamp(value) {
+    const time = Date.parse(value || '');
+    if (!Number.isFinite(time)) return '<span style="color:var(--t3)">未获取</span>';
+    const date = new Date(time);
+    return esc(`${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`);
+  }
+  function matrix(O) {
+    const rows = O.matrix || [];
+    if (!rows.length) return `<div class="h1">矩阵</div><p class="lead">已接入的自有号和对标号放在一张表里。这一页只读已有快照，不发起采集，也不打开窗口。</p><div class="panel"><div class="site-off">还没有接入账号。到系统页检测已打开的账号，或添加对标号。</div></div>`;
+    const body = rows.map(row => `<tr data-matrix-scope="${esc(row.scope)}" tabindex="0"><td><b>@${esc(row.identity)}</b>${row.displayName ? `<div class="fine">${esc(row.displayName)}</div>` : ''}</td><td>${row.personaName ? esc(row.personaName) : '<span style="color:var(--t3)">未绑定</span>'}</td><td><span class="st-chip idle"><i>○</i>${row.group === 'benchmark' ? '对标' : '自有'}</span></td><td class="n">${num(row.followers)}</td><td class="n">${delta(row.growth7)}</td><td class="n">${num(row.impressions)}</td><td class="n">${num(row.engagementRate, row.engagementRate == null ? '' : '%')}</td><td class="n">${num(row.profileVisits)}</td><td class="n">${num(row.linkClicks)}</td><td>${stamp(row.lastSuccess)}</td><td>${row.gap ? esc(row.gap) : '<span style="color:var(--t3)">–</span>'}</td></tr>`).join('');
+    return `<div class="h1">矩阵</div><p class="lead">已接入多少个号就列多少个。点一行进入这个号现有的单号范围。空着的指标是未获取，不会用 0 填上。Analytics 没有权限时，粉丝数仍保留。</p>
+      ${sec('账号对照', `${rows.length} 个号 · 只读已有快照`)}
+      <div class="panel"><div class="tw"><table><thead><tr><th>账号</th><th>人设</th><th>分组</th><th class="n">粉丝</th><th class="n">近 7 天</th><th class="n">曝光</th><th class="n">互动率</th><th class="n">主页访问</th><th class="n">链接点击</th><th>最近成功</th><th>缺口</th></tr></thead><tbody>${body}</tbody></table></div><div class="fine">这一页不发起采集，也不打开比特窗口。</div></div>
+      ${sec('粉丝走势', '各号已有快照，至少两次才画线')}
+      <div class="panel"><div class="chartbox" id="c-matrix"></div></div>`;
+  }
+  function drawMatrix(O) {
+    const el = document.querySelector('#c-matrix');
+    if (!el) return;
+    const colors = ['#0071e3', '#1f9d4c', '#0a66d1', '#c76a00', '#d70015', '#00a1d6', '#ff2442'];
+    const series = (O.matrix || []).map(row => ({
+      name: row.personaName || `@${row.identity}`,
+      pts: (row.series || []).map(point => [Date.parse(point.at), point.followers]).filter(point => Number.isFinite(point[0]) && point[1] != null),
+    })).filter(row => row.pts.length >= 2);
+    const width = el.clientWidth, height = el.clientHeight || 260;
+    const points = series.flatMap(row => row.pts);
+    const span = points.length ? Math.max(...points.map(point => point[0])) - Math.min(...points.map(point => point[0])) : 0;
+    if (!series.length || width < 60 || span < 3600e3) {
+      el.innerHTML = '<div class="empty">采样还不够。一个号至少有两次粉丝记录，并且隔了几小时，这里才会画出对比。</div>';
+      return;
+    }
+    const left = 52, right = 88, top = 14, bottom = 22;
+    const x0 = Math.min(...points.map(point => point[0])), x1 = Math.max(...points.map(point => point[0]));
+    const peak = Math.max(...points.map(point => point[1]), 1);
+    const step = Math.pow(10, Math.floor(Math.log10(peak)));
+    const unit = peak / step;
+    const scale = (unit <= 1 ? 1 : unit <= 1.5 ? 1.5 : unit <= 2 ? 2 : unit <= 3 ? 3 : unit <= 4 ? 4 : unit <= 5 ? 5 : unit <= 7.5 ? 7.5 : 10) * step;
+    const X = time => left + (time - x0) / (x1 - x0) * (width - left - right);
+    const Y = value => top + (height - top - bottom) - value / scale * (height - top - bottom);
+    let svg = `<svg width="${width}" height="${height}">`;
+    for (const tick of [0, scale / 2, scale]) svg += `<line x1="${left}" x2="${width - right}" y1="${Y(tick)}" y2="${Y(tick)}" stroke="rgba(0,0,0,.07)"/><text x="${left - 6}" y="${Y(tick) + 4}" text-anchor="end">${tick >= 10000 ? tick / 10000 + '万' : Math.round(tick)}</text>`;
+    series.forEach((row, index) => {
+      const color = colors[index % colors.length];
+      const last = row.pts[row.pts.length - 1];
+      svg += `<polyline points="${row.pts.map(point => `${X(point[0]).toFixed(1)},${Y(point[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${X(last[0]).toFixed(1)}" cy="${Y(last[1]).toFixed(1)}" r="4" fill="${color}" stroke="#fff" stroke-width="2"/><text x="${(X(last[0]) + 8).toFixed(1)}" y="${(Y(last[1]) + 4).toFixed(1)}" style="fill:var(--t2)">${esc(row.name)}</text>`;
+    });
+    el.innerHTML = svg + '</svg>';
+  }
+  document.addEventListener('click', event => {
+    const row = event.target.closest?.('[data-matrix-scope]');
+    if (!row) return;
+    document.cookie = `bt_profile=${encodeURIComponent(row.dataset.matrixScope)}; Path=/; SameSite=Strict; Max-Age=31536000`;
+    location.href = '/';
+  });
+
+  window.Editorial = { personas, calendar, approval, matrix, drawMatrix };
 })();
