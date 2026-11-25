@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store, identityOf } from './store.mjs';
 import { readProjects } from './importer.mjs';
@@ -143,6 +144,26 @@ export function makeApp({store=new Store(join(root,'data','matrix.db')), bitFact
           if(b.action==='delete') { store.deleteAccount(b.id); return send(200,{ok:true}); }
           if(b.action==='unbind') return send(200,{unbound:store.unbind(b.id)});
           throw new Error('未知账号操作');
+        } else if(url.pathname==='/api/personas') {
+          if(b.action==='delete') { store.deletePersona(b.id); return send(200,{ok:true}); }
+          return send(200,{id:store.savePersona(b)});
+        } else if(url.pathname==='/api/personas/import') {
+          let raw=b.document ?? b.json ?? null;
+          let sourceLabel=b.sourceLabel || 'JSON';
+          if(b.path) {
+            if(!isAbsolutePath(b.path)) throw new Error('人设文件须为绝对路径');
+            try { raw=readFileSync(b.path,'utf8'); }
+            catch { throw new Error('人设文件无法读取'); }
+            if(String(raw).length>200000) throw new Error('人设文件过大');
+            sourceLabel=basename(b.path);
+          }
+          if(raw==null) throw new Error('没有人设内容');
+          return send(200, store.importPersonas(raw,{sourceLabel}));
+        } else if(url.pathname==='/api/items') {
+          if(b.action==='delete') { store.deleteItem(b.id); return send(200,{ok:true}); }
+          return send(200,{id:store.saveItem(b)});
+        } else if(url.pathname==='/api/items/transition') {
+          return send(200,{item:store.transitionItem(b.id,b)});
         } else if(url.pathname==='/api/export') {
           const saved=writeExport(store, b.path, b.kind || 'all');
           return send(200, { ok: true, ...saved });

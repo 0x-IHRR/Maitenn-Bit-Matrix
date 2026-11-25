@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { postKey } from './collector.mjs';
+import { applyTransition, canonicalStatusUrl, matchItem, normalizeItemDraft, normalizePersona, parsePersonaDocument } from './editorial.mjs';
 import { isDenseSample } from './review.mjs';
 import { shanghaiDay } from './schedule.mjs';
 
@@ -77,6 +78,18 @@ export class Store {
       CREATE TABLE IF NOT EXISTS posts (id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id), source_key TEXT NOT NULL UNIQUE, data TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS snapshots (id INTEGER PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id), data TEXT NOT NULL, collected_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS collection_runs (id INTEGER PRIMARY KEY, account_id TEXT NOT NULL, slot TEXT NOT NULL DEFAULT '', started_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'started');
+      CREATE TABLE IF NOT EXISTS personas (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, positioning TEXT NOT NULL DEFAULT '', tone TEXT NOT NULL DEFAULT '',
+        taboos TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL DEFAULT '', columns_json TEXT NOT NULL DEFAULT '[]',
+        source TEXT NOT NULL DEFAULT 'manual', source_label TEXT NOT NULL DEFAULT '', imported_at TEXT,
+        account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL, updated_at TEXT NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS persona_account ON personas(account_id) WHERE account_id IS NOT NULL;
+      CREATE TABLE IF NOT EXISTS content_items (
+        id TEXT PRIMARY KEY, title TEXT NOT NULL, persona_id TEXT REFERENCES personas(id) ON DELETE SET NULL,
+        account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL, column_name TEXT NOT NULL DEFAULT '',
+        plan_date TEXT, status TEXT NOT NULL DEFAULT 'draft', note TEXT NOT NULL DEFAULT '',
+        return_reason TEXT NOT NULL DEFAULT '', post_url TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
     `);
     const cols = new Set(this.db.prepare('PRAGMA table_info(accounts)').all().map(c => c.name));
     const add = (name, ddl) => { if (!cols.has(name)) this.db.exec(`ALTER TABLE accounts ADD COLUMN ${name} ${ddl}`); };
@@ -360,6 +373,124 @@ export class Store {
     }
     const data=JSON.parse(post.data);
     this.db.prepare('UPDATE posts SET data=? WHERE id=?').run(JSON.stringify({...data,...patch,localMetadata:{at:now(),fields:patch}}),postId);
+  }
+  personaRow(row) {
+    let columns = [];
+    try { const parsed = JSON.parse(row.columns_json || '[]'); columns = Array.isArray(parsed) ? parsed : []; }
+    catch { columns = []; }
+    return { id: row.id, name: row.name, positioning: row.positioning, tone: row.tone, taboos: row.taboos, audience: row.audience, columns, source: row.source, sourceLabel: row.source_label, importedAt: row.imported_at, accountId: row.account_id, updatedAt: row.updated_at };
+  }
+  personas() { return this.db.prepare('SELECT * FROM personas ORDER BY rowid').all().map(row => this.personaRow(row)); }
+  savePersona(input = {}) {
+    const fields = normalizePersona(input);
+    return this.transaction(() => {
+      const id = input.id || randomUUID();
+      const existing = input.id ? this.db.prepare('SELECT * FROM personas WHERE id=?').get(id) : null;
+      if (input.id && !existing) throw new Error('人设不存在');
+      const accountId = input.accountId ? String(input.accountId) : null;
+      this.assertPersonaAccount(id, accountId);
+      const columns = JSON.stringify(fields.columns);
+      if (!existing) {
+        this.db.prepare(`INSERT INTO personas(id,name,positioning,tone,taboos,audience,columns_json,source,source_label,imported_at,account_id,updated_at)
+          VALUES (?,?,?,?,?,?,?,'manual','',NULL,?,?)`).run(id, fields.name, fields.positioning, fields.tone, fields.taboos, fields.audience, columns, accountId, now());
+      } else {
+        this.db.prepare(`UPDATE personas SET name=?,positioning=?,tone=?,taboos=?,audience=?,columns_json=?,account_id=?,updated_at=? WHERE id=?`)
+          .run(fields.name, fields.positioning, fields.tone, fields.taboos, fields.audience, columns, accountId, now(), id);
+      }
+      return id;
+    });
+  }
+  assertPersonaAccount(personaId, accountId) {
+    if (!accountId) return;
+    if (!this.db.prepare('SELECT id FROM accounts WHERE id=?').get(accountId)) throw new Error('账号不存在');
+    const other = this.db.prepare('SELECT id FROM personas WHERE account_id=? AND id!=?').get(accountId, personaId);
+    if (other) throw new Error('这个账号已经绑在其他人设上，请先解开');
+  }
+  deletePersona(id) {
+    if (!this.db.prepare('SELECT id FROM personas WHERE id=?').get(id)) throw new Error('人设不存在');
+    this.db.prepare('DELETE FROM personas WHERE id=?').run(id);
+  }
+  importPersonas(raw, { sourceLabel = 'JSON' } = {}) {
+    const cards = parsePersonaDocument(raw);
+    const label = String(sourceLabel || 'JSON').slice(0, 80);
+    return this.transaction(() => {
+      const imported = [];
+      for (const card of cards) {
+        let accountId = null;
+        let warning = '';
+        if (card.identity) {
+          const identity = identityOf('x', card.identity);
+          const account = this.db.prepare("SELECT id FROM accounts WHERE platform='x' AND identity=?").get(identity);
+          if (!account) warning = `@${identity} 还没有接入，人设先不绑定账号`;
+          else if (this.db.prepare('SELECT id FROM personas WHERE account_id=?').get(account.id)) warning = `@${identity} 已有人设，这张卡先不绑定`;
+          else accountId = account.id;
+        }
+        const id = randomUUID();
+        this.db.prepare(`INSERT INTO personas(id,name,positioning,tone,taboos,audience,columns_json,source,source_label,imported_at,account_id,updated_at)
+          VALUES (?,?,?,?,?,?,?,'import',?,?,?,?)`).run(id, card.name, card.positioning, card.tone, card.taboos, card.audience, JSON.stringify(card.columns), label, now(), accountId, now());
+        imported.push({ id, name: card.name, accountId, warning });
+      }
+      return { imported };
+    });
+  }
+  contentItems() {
+    return this.db.prepare('SELECT * FROM content_items ORDER BY rowid').all().map(row => this.itemRow(row));
+  }
+  itemRow(row) {
+    return { id: row.id, title: row.title, personaId: row.persona_id, accountId: row.account_id, columnName: row.column_name, planDate: row.plan_date, status: row.status, note: row.note, returnReason: row.return_reason, postUrl: row.post_url, createdAt: row.created_at, updatedAt: row.updated_at };
+  }
+  saveItem(input = {}) {
+    const fields = normalizeItemDraft(input);
+    return this.transaction(() => {
+      if (fields.personaId && !this.db.prepare('SELECT id FROM personas WHERE id=?').get(fields.personaId)) throw new Error('人设不存在');
+      if (fields.accountId && !this.db.prepare('SELECT id FROM accounts WHERE id=?').get(fields.accountId)) throw new Error('账号不存在');
+      if (!fields.accountId && fields.personaId) {
+        fields.accountId = this.db.prepare('SELECT account_id FROM personas WHERE id=?').get(fields.personaId)?.account_id || null;
+      }
+      const id = input.id || randomUUID();
+      const existing = input.id ? this.db.prepare('SELECT * FROM content_items WHERE id=?').get(id) : null;
+      if (input.id && !existing) throw new Error('内容条目不存在');
+      if (existing && existing.status !== 'draft') throw new Error('只有草稿可以改内容');
+      if (!existing) {
+        this.db.prepare(`INSERT INTO content_items(id,title,persona_id,account_id,column_name,plan_date,status,note,return_reason,post_url,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,'draft',?,'','',?,?)`).run(id, fields.title, fields.personaId, fields.accountId, fields.columnName, fields.planDate, fields.note, now(), now());
+      } else {
+        this.db.prepare(`UPDATE content_items SET title=?,persona_id=?,account_id=?,column_name=?,plan_date=?,note=?,updated_at=? WHERE id=?`)
+          .run(fields.title, fields.personaId, fields.accountId, fields.columnName, fields.planDate, fields.note, now(), id);
+      }
+      return id;
+    });
+  }
+  deleteItem(id) {
+    const row = this.db.prepare('SELECT status FROM content_items WHERE id=?').get(id);
+    if (!row) throw new Error('内容条目不存在');
+    if (row.status !== 'draft') throw new Error('只有草稿可以删除');
+    this.db.prepare('DELETE FROM content_items WHERE id=?').run(id);
+  }
+  transitionItem(id, input = {}) {
+    const action = input.action;
+    if (!['submit', 'approve', 'mark', 'return'].includes(action)) throw new Error('不能这样改状态');
+    return this.transaction(() => {
+      const row = this.db.prepare('SELECT * FROM content_items WHERE id=?').get(id);
+      if (!row) throw new Error('内容条目不存在');
+      const status = applyTransition(row.status, action);
+      let reason = row.return_reason;
+      let postUrl = row.post_url;
+      if (action === 'return') {
+        reason = String(input.reason || '').trim();
+        if (!reason) throw new Error('退回需要填写原因');
+        reason = reason.slice(0, 500);
+      }
+      if (action === 'submit') reason = '';
+      if (action === 'mark') postUrl = input.postUrl ? canonicalStatusUrl(input.postUrl) : '';
+      this.db.prepare('UPDATE content_items SET status=?,return_reason=?,post_url=?,updated_at=? WHERE id=?').run(status, reason, postUrl, now(), id);
+      return this.itemRow(this.db.prepare('SELECT * FROM content_items WHERE id=?').get(id));
+    });
+  }
+  editorialView(accounts = this.accounts()) {
+    const personas = this.personas();
+    const items = this.contentItems().map(item => ({ ...item, matched: matchItem(item, accounts) }));
+    return { personas, items };
   }
   close() { this.db.close(); }
 }

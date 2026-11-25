@@ -11,7 +11,7 @@ a{color:inherit;text-decoration:none}
 .top{display:flex;align-items:center;gap:16px;min-width:0;padding:0 2px}
 .logo{font-size:22px;font-weight:700;letter-spacing:.04em;white-space:nowrap}.logo i{font-style:normal;color:var(--accent)}
 .tag{color:var(--t3);font-size:12px;letter-spacing:.08em;white-space:nowrap}
-.nav{display:flex;gap:2px;margin-left:8px;padding:3px;border-radius:999px;background:rgba(0,0,0,.05)}
+.nav{display:flex;gap:2px;margin-left:8px;padding:3px;border-radius:999px;background:rgba(0,0,0,.05);flex-wrap:wrap}
 .nav a{padding:5px 14px;border-radius:999px;color:var(--t2);font-size:13px;font-weight:500;white-space:nowrap;transition:background .2s,color .2s}.nav a:hover{color:var(--t1)}
 .nav a.on{background:#fff;color:var(--t1);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .lights{margin-left:auto;display:flex;gap:6px;font-size:12px;color:var(--t2);white-space:nowrap}
@@ -193,7 +193,7 @@ summary .lg{--s:24px}summary b{width:70px;font-weight:600;flex:none}summary span
 .cal-e:hover{box-shadow:0 4px 12px rgba(0,0,0,.12)}.cal-e img{width:30px;height:40px;object-fit:cover;border-radius:5px;flex:none}
 .cal-e div{min-width:0}.cal-e b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cal-e span{font-size:11px;color:var(--t3);white-space:nowrap}
 .cal-e span i,.cal-lg i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:#c7c7cc}
-.cal-e.ok span i,.cal-lg i.ok{background:#30d158}.cal-e.sch span i,.cal-lg i.sch{background:#0a84ff}.cal-e.todo span i,.cal-lg i.todo{background:#ff9f0a}.cal-e.bad span i,.cal-lg i.bad{background:#ff3b30}.cal-e.plan span i,.cal-lg i.plan{background:transparent;box-shadow:inset 0 0 0 1.5px #8e8e93}
+.cal-e.ok span i,.cal-lg i.ok{background:#30d158}.cal-e.sch span i,.cal-lg i.sch{background:#0a84ff}.cal-e.todo span i,.cal-lg i.todo{background:#ff9f0a}.cal-e.bad span i,.cal-lg i.bad{background:#ff3b30}.cal-e.plan span i,.cal-lg i.plan{background:transparent;box-shadow:inset 0 0 0 1.5px #8e8e93}.cal-e.seen span i,.cal-lg i.seen{background:#6e6e73}
 .cal-e.plan{background:transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
 .cal-lg{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--t2)}
 @media (max-width:760px){.cal-d{min-height:84px;padding:5px}.cal-e img{display:none}.cal-e b{font-size:11px}.cal-e span{display:none}}

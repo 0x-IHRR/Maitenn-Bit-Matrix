@@ -1,3 +1,4 @@
+import { buildCalendar } from './editorial.mjs';
 import { validMetric } from './store.mjs';
 import { healthIssues, reviewsForPost, weeklyReport } from './review.mjs';
 
@@ -19,6 +20,16 @@ export function nativeOverview(store, running, connectionError, profileId='') {
     if(a.group==='benchmark') return !profileId;
     return a.active && (!profileId || a.profileId===profileId);
   });
+  const editorial=store.editorialView(allAccounts.filter(a=>a.platform==='x'));
+  const personaByAccount=new Map(editorial.personas.filter(p=>p.accountId).map(p=>[p.accountId,p]));
+  const scopedIds=new Set(accounts.map(a=>a.id));
+  const visibleItem=item=>{
+    if(!profileId) return true;
+    if(item.accountId && scopedIds.has(item.accountId)) return true;
+    const persona=editorial.personas.find(p=>p.id===item.personaId);
+    return !!(persona?.accountId && scopedIds.has(persona.accountId));
+  };
+  const contentItems=editorial.items.filter(visibleItem);
   const days=new Map();
   for(const a of accounts) {
     const seen=new Set();
@@ -42,7 +53,9 @@ export function nativeOverview(store, running, connectionError, profileId='') {
     const interactions=metrics&&['likes','comments','favorites','shares'].map(k=>metrics[k]);
     const history=[...(p.metricsHistory||[]),...a.postSamples.filter(s=>s.id===p.id).map(s=>({day:s.at.slice(0,10),...(s.metrics||{})}))].map(m=>({...m,platform:'x',episode_id:p.id}));
     samples.push(...(p.samples||[]).map(s=>({...s,episode_id:p.id})),...a.postSamples.filter(s=>s.id===p.id).map(s=>({...s.metrics,ts:s.at.slice(0,16),episode_id:p.id,platform:'x'})));
+    const persona=personaByAccount.get(a.id);
     return {id:p.id,episode:p.episode??'',name:`@${a.identity} · ${p.projectName||p.title}`,nick:`@${a.identity} · ${p.nick||p.title}`,short:p.title,
+      personaId:persona?.id||null,personaName:persona?.name||'',
       schedule:p.schedule||null,createdAt:p.createdAt||null,covers:Object.keys(p.covers||{}),views:metrics?.views??null,
       inter:interactions?.every(validMetric)?interactions.reduce((x,y)=>x+y,0):null,
       profileId:a.profileId,accountId:a.id,identity:a.identity,lastSuccess:p.lastSuccess||null,dir:p.projectPath,durationSec:p.durationSec||0,
@@ -58,7 +71,9 @@ export function nativeOverview(store, running, connectionError, profileId='') {
   const analytics = { impressions: sumOf('impressions'), profileVisits: sumOf('profileVisits'), linkClicks: sumOf('linkClicks'), accounts: accounts.filter(a => a.group !== 'benchmark').map(a => ({ id: a.id, identity: a.identity, ...(a.analytics || {}), issue: a.analyticsIssue || null, history: a.analyticsHistory || [] })) };
   const issues=healthIssues({ accounts, connectionError });
   samples.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
-  return {name:'比特媒体矩阵',matrixReadOnly:!!historyId,episodes,followers,samples,analytics,actions:[],feed:[],siteOn:false,site:{days:[],channels:[],campaigns:[]},weekly:weeklyReport(accounts),
+  const calendar=buildCalendar({posts:episodes.map(e=>({id:e.id,title:e.short||e.nick,createdAt:e.createdAt,personaName:e.personaName,identity:e.identity,accountId:e.accountId})),items:contentItems});
+  const roster=allAccounts.filter(a=>a.platform==='x').map(a=>({id:a.id,identity:a.identity,displayName:a.displayName,group:a.group,active:a.active,profileId:a.profileId}));
+  return {name:'比特媒体矩阵',matrixReadOnly:!!historyId,episodes,followers,samples,analytics,personas:editorial.personas,contentItems,roster,calendar,actions:[],feed:[],siteOn:false,site:{days:[],channels:[],campaigns:[]},weekly:weeklyReport(accounts),
     health:{nas:false,chrome:profiles.some(p=>running.has(p.id)),issues,platforms:[{id:'x',disabled:false,state:paused?'out':allReady?'ok':'',reason:paused?'有账号需要处理':issues.find(issue=>issue.code==='bit')?.text||''}]},
     scope:{profiles,selectedProfileId:profileId,accountCount:accounts.length,availableAccountCount:accounts.filter(a=>validMetric(a.followers)).length,
       profileCount:profiles.length,runningCount:profiles.filter(p=>running.has(p.id)).length,
